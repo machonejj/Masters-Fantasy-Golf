@@ -196,6 +196,21 @@ function Participants({ participants, settings, busy, run, flash }) {
     );
   }
 
+  // A ready-to-send message for a player: app URL (wherever this is hosted) + code.
+  function copyInvite(playerName, code) {
+    if (!code) return;
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const text =
+      `⛳ You're in the Masters Fantasy Golf pool${playerName ? `, ${playerName}` : ''}!\n\n` +
+      `Log in here: ${origin}\n` +
+      `Your access code: ${code}\n\n` +
+      `Just enter the code — no password needed.`;
+    navigator.clipboard?.writeText(text).then(
+      () => flash('ok', `Invite for ${playerName} copied — paste it to them.`),
+      () => {}
+    );
+  }
+
   return (
     <div className="card">
       <div className="card-title">Players ({participants.length})</div>
@@ -210,8 +225,14 @@ function Participants({ participants, settings, busy, run, flash }) {
             <code className="flex-1 text-lg font-mono font-bold tracking-widest text-masters-green">
               {justCreated.code}
             </code>
+            <button
+              onClick={() => copyInvite(justCreated.name, justCreated.code)}
+              className="btn-primary btn-sm"
+            >
+              Copy invite
+            </button>
             <button onClick={() => copy(justCreated.code)} className="btn-outline btn-sm">
-              Copy
+              Code
             </button>
             <button
               onClick={() => setJustCreated(null)}
@@ -235,13 +256,22 @@ function Participants({ participants, settings, busy, run, flash }) {
             </span>
             <span className="flex-1 text-sm">{p.display_name}</span>
             {codes[p.id] ? (
-              <button
-                onClick={() => copy(codes[p.id])}
-                title="Click to copy"
-                className="font-mono text-xs font-bold tracking-wider text-masters-green bg-masters-green-light/60 rounded px-2 py-1 hover:bg-masters-green-light"
-              >
-                {codes[p.id]}
-              </button>
+              <>
+                <button
+                  onClick={() => copy(codes[p.id])}
+                  title="Click to copy the code"
+                  className="font-mono text-xs font-bold tracking-wider text-masters-green bg-masters-green-light/60 rounded px-2 py-1 hover:bg-masters-green-light"
+                >
+                  {codes[p.id]}
+                </button>
+                <button
+                  onClick={() => copyInvite(p.display_name, codes[p.id])}
+                  title="Copy an invite message to send this player"
+                  className="btn-outline btn-sm"
+                >
+                  ✉ Invite
+                </button>
+              </>
             ) : (
               <span className="chip bg-gray-100 text-gray-400">no code</span>
             )}
