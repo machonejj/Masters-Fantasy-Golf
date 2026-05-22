@@ -1,12 +1,19 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { usePoolData } from '@/lib/usePoolData';
 import { Loading, PageHeader } from '@/app/page';
 import { teamData, scoreText, scoreColor } from '@/lib/scoring';
+import { useLiveScores, mergeLive } from '@/lib/useLiveScores';
+import PlayerScorecard from '@/components/PlayerScorecard';
 
 export default function MyTeamPage() {
   const { loading, user, settings, participants, golfers, picks } = usePoolData();
+  const [selected, setSelected] = useState(null); // golfer to show scorecard for
+
+  // Live ESPN scores so the roster + standing stay current automatically.
+  const { live } = useLiveScores();
+  const liveGolfers = useMemo(() => golfers.map((g) => mergeLive(g, live)), [golfers, live]);
 
   const me = useMemo(
     () => participants.find((p) => p.user_id === user?.id) || null,
@@ -14,20 +21,20 @@ export default function MyTeamPage() {
   );
 
   const data = useMemo(
-    () => (me && settings ? teamData(me.id, picks, golfers, settings) : null),
-    [me, settings, picks, golfers]
+    () => (me && settings ? teamData(me.id, picks, liveGolfers, settings) : null),
+    [me, settings, picks, liveGolfers]
   );
 
   const rank = useMemo(() => {
     if (!settings) return null;
     const standings = participants
-      .map((p) => teamData(p.id, picks, golfers, settings))
+      .map((p) => teamData(p.id, picks, liveGolfers, settings))
       .map((d, i) => ({ id: participants[i].id, score: d.teamScore }))
       .filter((x) => x.score !== null)
       .sort((a, b) => a.score - b.score);
     const idx = standings.findIndex((x) => x.id === me?.id);
     return idx === -1 ? null : idx + 1;
-  }, [participants, picks, golfers, settings, me]);
+  }, [participants, picks, liveGolfers, settings, me]);
 
   if (loading) return <Loading />;
 
@@ -65,7 +72,10 @@ export default function MyTeamPage() {
           ranked.map(({ g, score }) => (
             <div
               key={g.id}
-              className="flex items-center justify-between py-2.5 border-b border-masters-green-light/60 last:border-0"
+              onClick={() =>
+                setSelected({ name: g.name, owner: me.display_name, teamSeed: me.draft_position })
+              }
+              className="flex items-center justify-between py-2.5 border-b border-masters-green-light/60 last:border-0 cursor-pointer hover:bg-masters-green-pale/60 rounded -mx-1 px-1"
             >
               <div className="flex items-center gap-2">
                 {data.countingSet.has(g.id) ? (
@@ -87,6 +97,10 @@ export default function MyTeamPage() {
           ))
         )}
       </div>
+
+      {selected && (
+        <PlayerScorecard player={selected} onClose={() => setSelected(null)} />
+      )}
     </div>
   );
 }

@@ -5,10 +5,10 @@ import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
 const TABS = [
-  { href: '/', label: 'Leaderboard' },
-  { href: '/draft', label: 'Draft Room' },
+  { href: '/', label: 'Standings' },
   { href: '/team', label: 'My Team' },
-  { href: '/golfers', label: 'Golfers' },
+  { href: '/golfers', label: 'The Field' },
+  { href: '/draft', label: 'Draft Room' },
 ];
 
 export default function NavBar({ profile }) {
@@ -21,6 +21,9 @@ export default function NavBar({ profile }) {
     : TABS;
 
   async function signOut() {
+    try {
+      localStorage.removeItem('poolCode'); // forget the remembered code on a real sign-out
+    } catch {}
     await supabase.auth.signOut();
     router.push('/login');
     router.refresh();

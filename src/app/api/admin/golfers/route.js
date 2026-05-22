@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { DEFAULT_GOLFERS } from '@/lib/golfers-seed';
-import { fetchEspnLeaderboard } from '@/lib/espn';
+import { fetchEspnLeaderboard, espnToParRounds } from '@/lib/espn';
 
 export async function POST(request) {
   const ctx = await requireAdmin();
@@ -44,25 +44,40 @@ export async function POST(request) {
     } catch (err) {
       return NextResponse.json({ error: err.message }, { status: 502 });
     }
+
     const { data: golfers } = await db.from('golfers').select('*');
     const byName = new Map((golfers || []).map((g) => [g.name.toLowerCase(), g]));
+
     let updated = 0;
+    const toInsert = [];
     for (const c of board.competitors) {
+      const [r1, r2, r3, r4] = espnToParRounds(c);
+      const patch = { status: c.status, thru: c.thru, today: c.score, r1, r2, r3, r4 };
       const g = byName.get(c.name.toLowerCase());
-      if (!g) continue;
-      const patch = {
-        status: c.status,
-        thru: c.thru,
-        today: c.score,
-        r1: c.rounds[0] ?? g.r1,
-        r2: c.rounds[1] ?? g.r2,
-        r3: c.rounds[2] ?? g.r3,
-        r4: c.rounds[3] ?? g.r4,
-      };
-      await db.from('golfers').update(patch).eq('id', g.id);
-      updated++;
+      if (g) {
+        await db.from('golfers').update(patch).eq('id', g.id);
+        updated++;
+      } else {
+        // New to the field — add them (rank from the live leaderboard order).
+        toInsert.push({ name: c.name, rank: c.sortOrder + 1, ...patch });
+      }
     }
-    return NextResponse.json({ ok: true, updated, tournament: board.tournament });
+    if (toInsert.length) await db.from('golfers').insert(toInsert);
+
+    // Keep the pool's tournament name + par in step with the live event.
+    const statePatch = {};
+    if (board.tournament) statePatch.tournament_name = board.tournament;
+    if (board.coursePar) statePatch.course_par = board.coursePar;
+    if (Object.keys(statePatch).length) {
+      await db.from('draft_state').update(statePatch).eq('id', 1);
+    }
+
+    return NextResponse.json({
+      ok: true,
+      updated,
+      inserted: toInsert.length,
+      tournament: board.tournament,
+    });
   }
 
   return NextResponse.json({ error: 'Unknown action.' }, { status: 400 });

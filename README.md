@@ -1,11 +1,12 @@
 # ⛳ Masters Fantasy Golf
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fmachonejj%2Fmasters-fantasy-golf&env=NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,SUPABASE_SERVICE_ROLE_KEY,CRON_SECRET&envDescription=Supabase%20project%20keys%20plus%20a%20random%20CRON_SECRET&envLink=https%3A%2F%2Fgithub.com%2Fmachonejj%2Fmasters-fantasy-golf%2Fblob%2Fmain%2F.env.local.example)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fmachonejj%2Fmasters-fantasy-golf&env=NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,SUPABASE_SERVICE_ROLE_KEY,ADMIN_ACCESS_CODE,CRON_SECRET&envDescription=Supabase%20project%20keys%2C%20an%20admin%20access%20code%2C%20and%20a%20random%20CRON_SECRET&envLink=https%3A%2F%2Fgithub.com%2Fmachonejj%2Fmasters-fantasy-golf%2Fblob%2Fmain%2F.env.local.example)
 
 A full-stack fantasy golf pool built with **Next.js (App Router)**, **Supabase**, and
 **Tailwind CSS** in a Masters green-and-gold theme.
 
-- **Email/password auth** (Supabase) — the first account becomes the pool admin.
+- **Code-based login** — no emails or passwords. You set a secret **admin code**;
+  each player logs in with a short **player code** the admin generates for them.
 - **Draft Room** — snake draft with a 1-hour pick clock that **auto-picks the best
   available golfer** when the timer expires.
 - **Leaderboard** — standings using the **best 3 of 6** golfer scores per team.
@@ -49,11 +50,12 @@ Fill in from **Supabase → Project Settings → API**:
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...      # server-only, never exposed to the browser
+ADMIN_ACCESS_CODE=...              # secret code that grants admin (min 6 chars)
 ```
 
-> **Tip:** For a smooth pool, disable email confirmation in
-> **Supabase → Authentication → Providers → Email** (turn off "Confirm email"),
-> so people can sign in immediately after signing up.
+> **`ADMIN_ACCESS_CODE`** is the master key to the pool: whoever enters it at the
+> login screen becomes the admin (it bootstraps the admin account on first use).
+> Keep it private, and change it any time to rotate the admin login.
 
 ### 3. Run
 
@@ -66,24 +68,25 @@ Open <http://localhost:3000>.
 
 ## First-run checklist
 
-1. **Sign up** — the first account is automatically the **admin**.
+1. **Log in as admin** — go to the login screen and enter your `ADMIN_ACCESS_CODE`.
+   This bootstraps the admin account and drops you into the **Admin** panel.
 2. **Admin → Field & Scores → Load default field** (seeds the 144-golfer Masters field).
-3. **Admin → Participants** — add players. Pick signed-up users from the dropdown so
-   their **My Team** page links to their roster (or add name-only "guest" teams).
+3. **Admin → Players** — add each player by name. Every player you add gets a unique
+   **login code**; copy it (click the code) and share it with that person.
 4. **Shuffle order** to randomize the snake order.
 5. **Admin → Draft Controls → Start Draft.** Each pick has a 1-hour clock.
 6. During the tournament, **Admin → Pull live scores (ESPN)** to update standings,
    or edit any golfer's rounds/status by hand.
 
-> Promote another admin in SQL:
-> `update public.profiles set is_admin = true where email = 'you@example.com';`
+> Players just visit the site and enter their code — no sign-up, email, or password.
+> Anyone who knows the `ADMIN_ACCESS_CODE` has admin access, so guard it.
 
 ### Want to see it populated right away?
 
 Run [`supabase/seed.sql`](supabase/seed.sql) in the SQL editor. It creates 4 demo
-teams, a 24-golfer scored field, and a completed snake draft so the Leaderboard,
-My Team, and Golfers pages have real data. To claim a demo team as your own, point
-its `participants.user_id` at your profile id (or just add yourself in Admin).
+teams, a 24-golfer scored field, and a completed snake draft so the Leaderboard
+and Golfers pages have real data. (Demo teams have no login codes — they're just
+for viewing; add real players from **Admin → Players** to hand out codes.)
 
 ## Deploy
 
@@ -136,20 +139,22 @@ src/
   app/
     layout.js                 root layout + nav + auth-gated shell
     page.js                   Leaderboard (home)
-    login/page.js             email/password auth
+    login/page.js             single access-code login (player + admin)
     draft/page.js             Draft Room (snake order, timer, auto-pick)
     team/page.js              My Team
     golfers/page.js           Golfers + live scoring
-    admin/page.js             Admin panel
+    admin/page.js             Admin panel (incl. add players → generate codes)
     api/
+      auth/resolve-code       turn a code into a login; bootstrap/rotate admin
       draft/pick              make a pick (turn-validated)
       draft/tick              auto-pick on timeout (idempotent)
       draft/control           admin: start/pause/resume/reset/settings
-      admin/participants      admin: add/remove/reorder/shuffle teams
+      admin/participants      admin: add player (+code) / remove / reorder / codes
       admin/golfers           admin: seed/add/edit/delete + ESPN sync
       golfers/live            live ESPN leaderboard proxy
   lib/
     supabase/{client,server,admin,middleware}.js
+    access-codes.js           code generation + hidden-login derivation (server)
     scoring.js                golferTotal / teamData / formatting
     draft.js                  snake order + best-available helpers
     draft-server.js           shared draft-advance logic

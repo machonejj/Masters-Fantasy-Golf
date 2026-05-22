@@ -134,9 +134,10 @@ alter table public.picks        enable row level security;
 
 create policy "profiles readable by authenticated"
   on public.profiles for select to authenticated using (true);
-create policy "own profile is updatable"
-  on public.profiles for update to authenticated
-  using (auth.uid() = id) with check (auth.uid() = id);
+-- No client-side profile writes: profiles are created by the new-user trigger
+-- and only ever updated server-side via the service-role key. Deliberately NOT
+-- granting an update policy here, so a logged-in user can't promote themselves
+-- to admin (is_admin) from the browser.
 
 create policy "draft_state readable by authenticated"
   on public.draft_state for select to authenticated using (true);

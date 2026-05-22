@@ -54,3 +54,17 @@
     @apply inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold;
   }
 }
+
+/* Pulsing gold ring for the "Your Turn" draft banner. */
+@keyframes turnPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(201, 168, 76, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 14px rgba(201, 168, 76, 0);
+  }
+}
+.animate-turn {
+  animation: turnPulse 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}

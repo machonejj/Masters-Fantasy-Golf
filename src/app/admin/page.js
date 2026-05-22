@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePoolData } from '@/lib/usePoolData';
 import { Loading, PageHeader } from '@/app/page';
 import { snakePicker, totalPicks, isDraftComplete } from '@/lib/draft';
@@ -17,18 +17,10 @@ async function api(url, method, body) {
 }
 
 export default function AdminPage() {
-  const { loading, profile, settings, participants, golfers, picks, refresh, supabase } =
+  const { loading, profile, settings, participants, golfers, picks, refresh } =
     usePoolData({ pollMs: 10000 });
-  const [profiles, setProfiles] = useState([]);
   const [msg, setMsg] = useState(null); // {type, text}
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    supabase
-      .from('profiles')
-      .select('id, display_name, email')
-      .then(({ data }) => setProfiles(data || []));
-  }, [supabase]);
 
   function flash(type, text) {
     setMsg({ type, text });
@@ -51,7 +43,7 @@ export default function AdminPage() {
   if (!profile?.is_admin) {
     return (
       <div className="card text-center text-gray-600">
-        Admin access required. Ask the pool owner to promote your account.
+        Admin access required. Sign out and log in with the admin code to manage the pool.
       </div>
     );
   }
@@ -81,10 +73,10 @@ export default function AdminPage() {
       />
       <Participants
         participants={participants}
-        profiles={profiles}
         settings={settings}
         busy={busy}
         run={run}
+        flash={flash}
       />
       <Scores
         golfers={golfers}
@@ -166,30 +158,71 @@ function DraftControls({ settings, participants, busy, run, flash }) {
 }
 
 /* ── Participants ────────────────────────────────────────────── */
-function Participants({ participants, profiles, settings, busy, run }) {
+function Participants({ participants, settings, busy, run, flash }) {
   const [name, setName] = useState('');
-  const [userId, setUserId] = useState('');
+  const [codes, setCodes] = useState({}); // participantId → login code
+  const [justCreated, setJustCreated] = useState(null); // { name, code }
   const draftRunning = settings?.status === 'active' || settings?.status === 'paused';
 
-  const linkedUserIds = new Set(participants.map((p) => p.user_id).filter(Boolean));
-  const availableProfiles = profiles.filter((p) => !linkedUserIds.has(p.id));
+  const loadCodes = useCallback(async () => {
+    try {
+      const r = await api('/api/admin/participants', 'GET');
+      setCodes(r.codes || {});
+    } catch {
+      /* non-fatal: codes just won't show */
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCodes();
+  }, [loadCodes, participants.length]);
 
   function add() {
-    const chosen = profiles.find((p) => p.id === userId);
-    const display = chosen?.display_name || name;
+    const display = name.trim();
+    if (!display) return;
     run(async () => {
-      await api('/api/admin/participants', 'POST', {
-        display_name: display,
-        user_id: userId || null,
-      });
+      const r = await api('/api/admin/participants', 'POST', { display_name: display });
       setName('');
-      setUserId('');
+      setJustCreated({ name: r.participant?.display_name || display, code: r.code });
+      await loadCodes();
     });
+  }
+
+  function copy(text) {
+    if (!text) return;
+    navigator.clipboard?.writeText(text).then(
+      () => flash('ok', `Code ${text} copied to clipboard.`),
+      () => {}
+    );
   }
 
   return (
     <div className="card">
-      <div className="card-title">Participants ({participants.length})</div>
+      <div className="card-title">Players ({participants.length})</div>
+
+      {justCreated && (
+        <div className="bg-masters-green-light/70 border border-masters-green/20 rounded-lg p-3 mb-4">
+          <div className="text-xs text-gray-500 mb-1">
+            Created <b className="text-masters-green">{justCreated.name}</b>. Share this login
+            code:
+          </div>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 text-lg font-mono font-bold tracking-widest text-masters-green">
+              {justCreated.code}
+            </code>
+            <button onClick={() => copy(justCreated.code)} className="btn-outline btn-sm">
+              Copy
+            </button>
+            <button
+              onClick={() => setJustCreated(null)}
+              className="text-gray-400 text-sm px-1"
+              title="Dismiss"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-1 mb-4">
         {participants.map((p, i) => (
@@ -200,12 +233,18 @@ function Participants({ participants, profiles, settings, busy, run }) {
             <span className="w-6 text-center text-sm font-bold text-masters-green">
               {p.draft_position}
             </span>
-            <span className="flex-1 text-sm">
-              {p.display_name}
-              {!p.user_id && (
-                <span className="chip bg-gray-100 text-gray-400 ml-2">no login</span>
-              )}
-            </span>
+            <span className="flex-1 text-sm">{p.display_name}</span>
+            {codes[p.id] ? (
+              <button
+                onClick={() => copy(codes[p.id])}
+                title="Click to copy"
+                className="font-mono text-xs font-bold tracking-wider text-masters-green bg-masters-green-light/60 rounded px-2 py-1 hover:bg-masters-green-light"
+              >
+                {codes[p.id]}
+              </button>
+            ) : (
+              <span className="chip bg-gray-100 text-gray-400">no code</span>
+            )}
             <button
               disabled={busy || i === 0}
               onClick={() => run(() => api('/api/admin/participants', 'PATCH', { action: 'move', id: p.id, direction: 'up' }))}
@@ -223,7 +262,11 @@ function Participants({ participants, profiles, settings, busy, run }) {
             <button
               disabled={busy}
               onClick={() =>
-                run(() => api(`/api/admin/participants?id=${p.id}`, 'DELETE'))
+                run(async () => {
+                  if (!window.confirm(`Remove ${p.display_name}? Their login code will stop working.`))
+                    return;
+                  await api(`/api/admin/participants?id=${p.id}`, 'DELETE');
+                })
               }
               className="btn-danger btn-sm"
             >
@@ -232,38 +275,23 @@ function Participants({ participants, profiles, settings, busy, run }) {
           </div>
         ))}
         {participants.length === 0 && (
-          <p className="text-sm text-gray-400">No participants yet.</p>
+          <p className="text-sm text-gray-400">No players yet. Add one below to generate a code.</p>
         )}
       </div>
 
       <div className="flex flex-wrap gap-2 items-end">
         <div className="flex-1 min-w-[160px]">
-          <label className="label">Add registered user</label>
-          <select
-            className="input"
-            value={userId}
-            onChange={(e) => setUserId(e.target.value)}
-          >
-            <option value="">— pick a signed-up user —</option>
-            {availableProfiles.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.display_name} ({p.email})
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="flex-1 min-w-[160px]">
-          <label className="label">…or a name only</label>
+          <label className="label">Add player</label>
           <input
             className="input"
-            placeholder="Guest team"
+            placeholder="Player name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            disabled={!!userId}
+            onKeyDown={(e) => e.key === 'Enter' && add()}
           />
         </div>
-        <button disabled={busy || (!name && !userId)} onClick={add} className="btn-primary">
-          Add
+        <button disabled={busy || !name.trim()} onClick={add} className="btn-primary">
+          Add &amp; get code
         </button>
         <button
           disabled={busy || draftRunning || participants.length < 2}
@@ -276,6 +304,10 @@ function Participants({ participants, profiles, settings, busy, run }) {
           🎲 Shuffle order
         </button>
       </div>
+      <p className="text-xs text-gray-400 mt-3">
+        Each player logs in with their code at the sign-in screen — no email or password needed.
+        Click a code to copy it.
+      </p>
     </div>
   );
 }

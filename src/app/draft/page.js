@@ -9,6 +9,7 @@ import {
   isDraftComplete,
   upcomingPicks,
 } from '@/lib/draft';
+import { teamColor } from '@/lib/teamColors';
 
 function fmtClock(secs) {
   if (secs == null || secs < 0) secs = 0;
@@ -136,26 +137,39 @@ export default function DraftPage() {
       {complete && (
         <div className="card bg-masters-green text-white text-center">
           <p className="font-serif text-lg">🏆 The draft is complete!</p>
-          <p className="text-white/70 text-sm">Head to the Leaderboard to follow the action.</p>
+          <p className="text-white/70 text-sm">Head to Standings to follow the action.</p>
         </div>
       )}
 
       {status === 'active' && !complete && onClock && (
         <div
           className={`card mb-5 flex items-center justify-between ${
-            isMyTurn ? 'bg-masters-gold-pale border-masters-gold' : ''
+            isMyTurn ? 'bg-masters-gold-pale border-2 border-masters-gold animate-turn' : ''
           }`}
         >
-          <div>
+          <div className="min-w-0">
             <div className="text-xs uppercase tracking-wide text-gray-500">
               Pick {draftState.current_pick + 1} of {total} · Round{' '}
               {Math.floor(draftState.current_pick / Math.max(participants.length, 1)) + 1}
             </div>
-            <div className="font-serif text-xl text-masters-green">
-              {isMyTurn ? "You're on the clock!" : `${onClock.display_name} is picking`}
-            </div>
+            {isMyTurn ? (
+              <div className="flex items-center gap-2 mt-1">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-masters-gold text-masters-green text-xs font-extrabold uppercase tracking-wider animate-pulse">
+                  <span className="w-2 h-2 rounded-full bg-masters-green" /> Your turn
+                </span>
+                <span className="font-serif text-xl text-masters-green hidden sm:inline">
+                  You&apos;re on the clock!
+                </span>
+              </div>
+            ) : (
+              <div className="font-serif text-xl text-masters-green flex items-center gap-2 mt-0.5">
+                <span className={`w-2.5 h-2.5 rounded-full ${teamColor(onClock.draft_position).dot}`} />
+                <span className={teamColor(onClock.draft_position).text}>{onClock.display_name}</span>
+                <span className="text-gray-400 text-base font-sans">is picking…</span>
+              </div>
+            )}
           </div>
-          <div className="text-right">
+          <div className="text-right shrink-0">
             <div
               className={`font-serif text-3xl font-bold tabular-nums ${
                 remaining !== null && remaining <= 60 ? 'text-score-over' : 'text-masters-green'
@@ -177,21 +191,25 @@ export default function DraftPage() {
         <div className="card mb-5">
           <div className="card-title">On Deck</div>
           <div className="flex gap-2 overflow-x-auto pb-1">
-            {upcoming.map(({ pickIndex, participant }) => (
-              <div
-                key={pickIndex}
-                className={`shrink-0 px-3 py-2 rounded-lg text-center ${
-                  pickIndex === draftState.current_pick
-                    ? 'bg-masters-green text-white'
-                    : 'bg-masters-green-light text-masters-green'
-                }`}
-              >
-                <div className="text-[10px] opacity-70">#{pickIndex + 1}</div>
-                <div className="text-xs font-semibold whitespace-nowrap">
-                  {participant?.display_name}
+            {upcoming.map(({ pickIndex, participant }) => {
+              const c = teamColor(participant?.draft_position);
+              const current = pickIndex === draftState.current_pick;
+              return (
+                <div
+                  key={pickIndex}
+                  className={`shrink-0 px-3 py-2 rounded-lg text-center border ${
+                    current
+                      ? 'bg-masters-green text-white border-masters-green animate-turn'
+                      : `${c.bg} ${c.text} ${c.border}`
+                  }`}
+                >
+                  <div className="text-[10px] opacity-70">#{pickIndex + 1}</div>
+                  <div className="text-xs font-semibold whitespace-nowrap">
+                    {participant?.display_name}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -256,37 +274,49 @@ export default function DraftPage() {
               <p className="text-sm text-gray-400">No participants yet.</p>
             )}
             {participants.map((p) => {
+              const c = teamColor(p.draft_position);
+              const isMe = myParticipant?.id === p.id;
+              const isOnClock = onClock?.id === p.id && status === 'active' && !complete;
               const roster = picks
                 .filter((pk) => pk.participant_id === p.id)
                 .map((pk) => golfers.find((g) => g.id === pk.golfer_id))
                 .filter(Boolean);
               return (
-                <div key={p.id} className="mb-3">
+                <div
+                  key={p.id}
+                  className={`mb-3 pl-2 border-l-4 ${c.borderL} ${
+                    isOnClock ? 'bg-masters-gold-pale rounded-r-lg py-1' : ''
+                  }`}
+                >
                   <div className="flex items-center justify-between">
-                    <span className="font-semibold text-sm">
-                      <span className="text-gray-400 mr-1">{p.draft_position}.</span>
-                      {p.display_name}
-                      {myParticipant?.id === p.id && (
-                        <span className="chip bg-masters-gold-light text-masters-green ml-2">
-                          you
+                    <span className="font-semibold text-sm flex items-center gap-1.5 min-w-0">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${c.dot}`} />
+                      <span className="text-gray-400">{p.draft_position}.</span>
+                      <span className={`truncate ${c.text}`}>{p.display_name}</span>
+                      {isMe && (
+                        <span className="chip bg-masters-gold-light text-masters-green">you</span>
+                      )}
+                      {isOnClock && (
+                        <span className="chip bg-masters-gold text-masters-green animate-pulse">
+                          picking
                         </span>
                       )}
                     </span>
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-gray-400 shrink-0">
                       {roster.length}/{gpt}
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-1 mt-1">
                     {roster.map((g) => (
-                      <span
-                        key={g.id}
-                        className="chip bg-masters-green-light text-masters-green"
-                      >
+                      <span key={g.id} className={`chip ${c.bg} ${c.text}`}>
                         {g.name}
                       </span>
                     ))}
                     {Array.from({ length: Math.max(0, gpt - roster.length) }).map((_, i) => (
-                      <span key={i} className="chip bg-gray-50 text-gray-300 border border-dashed border-gray-200">
+                      <span
+                        key={i}
+                        className="chip bg-gray-50 text-gray-300 border border-dashed border-gray-200"
+                      >
                         empty
                       </span>
                     ))}
