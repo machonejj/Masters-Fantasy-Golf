@@ -1,0 +1,18 @@
+{
+  "name": "Augusta Pick'em",
+  "short_name": "Pick'em",
+  "description": "Fantasy golf pool for the majors",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a4d2e",
+  "theme_color": "#1a4d2e",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='112' fill='%231a4d2e'/><text y='.85em' font-size='380' x='50%' text-anchor='middle'>⛳</text></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
