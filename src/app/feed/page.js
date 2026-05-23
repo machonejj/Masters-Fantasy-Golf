@@ -8,9 +8,7 @@ import ProbChart from '@/components/ProbChart';
 
 const FILTERS = [
   { key: 'all', label: 'All' },
-  { key: 'scoring', label: 'Scoring' },
   { key: 'mine', label: 'My Team' },
-  { key: 'pars', label: 'Pars' },
 ];
 
 // A hole's to-par → how loud it should be. Par is intentionally plain; under-par
@@ -87,22 +85,18 @@ export default function LiveFeedPage() {
   const myId = data?.myTeamId || null;
   const teamById = Object.fromEntries(teams.map((t) => [t.id, t]));
 
+  // The feed shows only scoring holes — pars are background noise, so we drop
+  // them entirely (the underlying data is unchanged; this is display-only).
+  const scoring = events.filter((e) => e.toPar !== 0);
   const counts = {
-    all: events.length,
-    scoring: events.filter((e) => e.toPar !== 0).length,
-    mine: events.filter((e) => e.teamId === myId).length,
-    pars: events.filter((e) => e.toPar === 0).length,
+    all: scoring.length,
+    mine: scoring.filter((e) => e.teamId === myId).length,
   };
-  const shown = events.filter((e) => {
-    if (filter === 'scoring') return e.toPar !== 0;
-    if (filter === 'pars') return e.toPar === 0;
-    if (filter === 'mine') return e.teamId === myId;
-    return true;
-  });
+  const shown = filter === 'mine' ? scoring.filter((e) => e.teamId === myId) : scoring;
 
   return (
     <div>
-      <PageHeader title="Live Feed" subtitle="Drafted players · hole by hole" />
+      <PageHeader title="Live Feed" subtitle="Birdies, bogeys & big moments" />
 
       {teams.length > 0 && (
         <div className="card mb-4">
@@ -127,7 +121,7 @@ export default function LiveFeedPage() {
 
       {shown.length === 0 ? (
         <div className="card text-center text-sm text-gray-400 py-8">
-          {events.length === 0
+          {scoring.length === 0
             ? 'No scoring yet — check back once play is underway.'
             : 'Nothing here for this filter.'}
         </div>
@@ -139,13 +133,11 @@ export default function LiveFeedPage() {
             const isNew = newKeys.has(evKey(e));
             const team = teamById[e.teamId];
             const mine = e.teamId === myId;
-            const hl = e.toPar !== 0 ? highlightOf(e) : null;
+            const hl = highlightOf(e);
             return (
               <Fragment key={evKey(e)}>
                 {showRound && <RoundDivider round={e.round} />}
-                {e.toPar === 0 ? (
-                  <ParRow e={e} team={team} />
-                ) : hl ? (
+                {hl ? (
                   <HighlightRow e={e} hl={hl} team={team} mine={mine} isNew={isNew} />
                 ) : (
                   <ScoreRow e={e} team={team} mine={mine} isNew={isNew} />
@@ -189,25 +181,6 @@ function TeamTag({ team, total, hex, light = false }) {
           {scoreText(total)}
         </span>
       )}
-    </div>
-  );
-}
-
-// Quiet, single-line par row — background information.
-function ParRow({ e, team }) {
-  const c = teamColor(team?.seed);
-  return (
-    <div className="flex items-center gap-2 px-2.5 py-0.5 text-[11px] text-gray-400">
-      <span className="truncate">
-        {e.golfer} · Par · Hole {e.hole}
-      </span>
-      <span className="ml-auto flex items-center gap-1 shrink-0">
-        <span
-          className="w-1.5 h-1.5 rounded-full"
-          style={{ backgroundColor: c.hex ? `${c.hex}59` : '#d1d5db' }}
-        />
-        <span className="max-w-[70px] truncate">{e.team}</span>
-      </span>
     </div>
   );
 }
