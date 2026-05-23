@@ -36,7 +36,9 @@ export default function NavBar({ profile }) {
         <div className="flex items-center justify-between px-4 h-12">
           <Link href="/" className="flex items-center gap-1.5 text-white whitespace-nowrap">
             <span className="text-lg leading-none">⛳</span>
-            <span className="font-serif text-base font-bold leading-none">Augusta Pickem</span>
+            <span className="font-masters text-base font-bold tracking-wide leading-none">
+              Augusta Pickem
+            </span>
           </Link>
           <div className="flex items-center gap-2">
             <span className="hidden sm:inline text-xs text-white/70">

@@ -92,7 +92,9 @@ export default function LoginPage() {
       <div className="relative z-[2] w-full max-w-sm bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6 shadow-2xl">
         <div className="text-center mb-6">
           <span className="text-4xl block mb-1">⛳</span>
-          <h1 className="font-serif text-2xl text-white">Augusta Pickem</h1>
+          <h1 className="font-masters text-2xl font-bold tracking-wide text-white">
+            Augusta Pickem
+          </h1>
           <p className="text-[11px] text-white/60 uppercase tracking-wider mt-1">
             Snake Draft · Best 3 of 6
           </p>

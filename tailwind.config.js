@@ -21,6 +21,7 @@ module.exports = {
       fontFamily: {
         serif: ['"Playfair Display"', 'Georgia', 'serif'],
         sans: ['"DM Sans"', 'system-ui', 'sans-serif'],
+        masters: ['Cinzel', '"Playfair Display"', 'Georgia', 'serif'],
       },
       boxShadow: {
         masters: '0 2px 14px rgba(26,77,46,0.10)',
