@@ -2,15 +2,24 @@
 
 import { useMemo, useState } from 'react';
 import { usePoolData } from '@/lib/usePoolData';
-import { teamData, scoreText, scoreColor, golferTotal } from '@/lib/scoring';
+import { teamData, scoreText, scoreColor, liveRoundIndex } from '@/lib/scoring';
 import { teamColor } from '@/lib/teamColors';
 import { useLiveScores, mergeLive } from '@/lib/useLiveScores';
 import PlayerScorecard from '@/components/PlayerScorecard';
 
 export default function LeaderboardPage() {
   const { loading, user, settings, participants, golfers, picks } = usePoolData();
-  const [expanded, setExpanded] = useState(null);
+  // Set of expanded participant ids — multiple teams can be open at once, and
+  // toggling one never collapses the others.
+  const [expanded, setExpanded] = useState(() => new Set());
   const [selected, setSelected] = useState(null); // golfer to show scorecard for
+
+  const toggleExpanded = (id) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
 
   // Live ESPN scores, refreshed on an interval, so standings stay current.
   const { live, updatedAt } = useLiveScores();
@@ -62,7 +71,7 @@ export default function LeaderboardPage() {
       ) : (
         <div className="card !p-0 overflow-hidden">
           {standings.map((row, i) => {
-            const isOpen = expanded === row.p.id;
+            const isOpen = expanded.has(row.p.id);
             const color = teamColor(row.p.draft_position);
             const isMe = row.p.id === myId;
             return (
@@ -73,7 +82,7 @@ export default function LeaderboardPage() {
                 }`}
               >
                 <button
-                  onClick={() => setExpanded(isOpen ? null : row.p.id)}
+                  onClick={() => toggleExpanded(row.p.id)}
                   className="w-full flex items-center gap-3 px-4 py-3 hover:bg-masters-green-pale text-left"
                 >
                   <span
@@ -125,6 +134,7 @@ export default function LeaderboardPage() {
                           .sort((a, b) => (a.score ?? 999) - (b.score ?? 999))
                           .map(({ g, score }) => {
                             const counts = row.countingSet.has(g.id);
+                            const missedCut = g.status === 'cut';
                             return (
                               <div
                                 key={g.id}
@@ -133,9 +143,12 @@ export default function LeaderboardPage() {
                                     name: g.name,
                                     owner: row.p.display_name,
                                     teamSeed: row.p.draft_position,
+                                    athleteId: g.athleteId ?? null,
                                   })
                                 }
-                                className="flex items-center gap-2 py-1.5 text-sm border-t border-masters-green-light/60 first:border-0 cursor-pointer hover:bg-white/60 rounded -mx-1 px-1"
+                                className={`flex items-center gap-2 py-1.5 text-sm border-t border-masters-green-light/60 first:border-0 cursor-pointer rounded -mx-1 px-1 ${
+                                  missedCut ? 'bg-red-50 hover:bg-red-100/70' : 'hover:bg-white/60'
+                                }`}
                               >
                                 {counts && (
                                   <span className="chip shrink-0 bg-masters-gold-light text-masters-green">
@@ -148,7 +161,7 @@ export default function LeaderboardPage() {
                                   }`}
                                 >
                                   {g.name}
-                                  {g.status === 'cut' && ' (CUT)'}
+                                  {g.status === 'cut' && ' (MC)'}
                                   {g.status === 'wd' && ' (WD)'}
                                 </span>
                                 <RoundBoxes g={g} />
@@ -191,19 +204,42 @@ export function PageHeader({ title, subtitle, action }) {
   );
 }
 
-// Per-round to-par as small score boxes (R1–R4). Hidden on the narrowest
-// screens so the golfer row stays readable.
+// Per-round to-par as small score boxes (R1–R4). For a missed-cut golfer, the
+// rounds they never played show "MC" in red. The round currently being played
+// gets a gold tint + ring (its score is still live); finished rounds are plain.
 function RoundBoxes({ g }) {
+  const missedCut = g.status === 'cut';
+  const liveIdx = liveRoundIndex([g.r1, g.r2, g.r3, g.r4], g.thru, g.status);
   return (
     <div className="flex gap-1 shrink-0">
       {[g.r1, g.r2, g.r3, g.r4].map((v, i) => {
         const has = v !== null && v !== undefined && v !== '';
+        if (!has && missedCut) {
+          return (
+            <span
+              key={i}
+              title={`R${i + 1} · Missed cut`}
+              className="w-6 text-center text-[10px] rounded py-0.5 bg-red-100 text-score-over font-semibold"
+            >
+              MC
+            </span>
+          );
+        }
+        const isLive = i === liveIdx;
         return (
           <span
             key={i}
-            title={`R${i + 1}`}
+            title={
+              isLive
+                ? `R${i + 1} · live (thru ${g.thru})`
+                : `R${i + 1}${has ? ' · final' : ''}`
+            }
             className={`w-6 text-center text-[10px] rounded py-0.5 ${
-              has ? `bg-white ${scoreColor(Number(v))}` : 'bg-gray-50 text-gray-300'
+              isLive
+                ? `bg-masters-gold-light ring-1 ring-masters-gold font-semibold ${scoreColor(Number(v))}`
+                : has
+                ? `bg-white ${scoreColor(Number(v))}`
+                : 'bg-gray-50 text-gray-300'
             }`}
           >
             {has ? scoreText(Number(v)) : '–'}

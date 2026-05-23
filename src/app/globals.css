@@ -68,3 +68,36 @@
 .animate-turn {
   animation: turnPulse 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+/* New live-feed scoring rows: a slight slide-in plus a quick gold glow. */
+@keyframes feedIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes feedGlow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(201, 168, 76, 0);
+  }
+  35% {
+    box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.3);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(201, 168, 76, 0);
+  }
+}
+.feed-new {
+  animation:
+    feedIn 0.35s ease-out both,
+    feedGlow 1.5s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .feed-new {
+    animation: none;
+  }
+}

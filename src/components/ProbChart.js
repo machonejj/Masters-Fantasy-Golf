@@ -68,7 +68,7 @@ export default function ProbChart({ teams, baseline = 0, highlightId = null, com
                   d={d}
                   fill="none"
                   stroke={t.color}
-                  strokeWidth={isHi ? 2.6 : 1.6}
+                  strokeWidth={isHi ? 1.1 : 0.7}
                   strokeOpacity={highlightId && !isHi ? 0.5 : 1}
                   strokeLinejoin="round"
                   strokeLinecap="round"
@@ -79,6 +79,7 @@ export default function ProbChart({ teams, baseline = 0, highlightId = null, com
                   r={isHi ? 3 : 2.2}
                   fill={t.color}
                   fillOpacity={highlightId && !isHi ? 0.5 : 1}
+                  className="animate-pulse"
                 />
               </g>
             );

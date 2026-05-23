@@ -13,7 +13,6 @@ export async function GET() {
 
   const seriesByTeam = allTeamWinSeries(teams, {
     counting: settings?.counting_scores ?? 3,
-    cutPenalty: settings?.cut_penalty ?? 16,
     sims: 800,
   });
 

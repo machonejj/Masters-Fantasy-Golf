@@ -32,14 +32,25 @@ function dayLabel(start, round) {
   return d.toLocaleString('en-US', { weekday: 'short', timeZone: 'UTC' }).toUpperCase();
 }
 
+// ESPN headshot for a golfer by their athlete id (transparent PNG). Not every
+// player has one, so the <img> hides itself on error.
+function headshotUrl(athleteId) {
+  return athleteId
+    ? `https://a.espncdn.com/i/headshots/golf/players/full/${athleteId}.png`
+    : null;
+}
+
 export default function PlayerScorecard({ player, onClose }) {
   const [data, setData] = useState(null);
   const [status, setStatus] = useState('loading'); // loading | ok | error
+  const [imgOk, setImgOk] = useState(true);
   const color = teamColor(player.teamSeed);
+  const headshot = headshotUrl(player.athleteId);
 
   useEffect(() => {
     let alive = true;
     setStatus('loading');
+    setImgOk(true);
     const qs = player.athleteId
       ? `athleteId=${player.athleteId}`
       : `name=${encodeURIComponent(player.name)}`;
@@ -96,19 +107,29 @@ export default function PlayerScorecard({ player, onClose }) {
             ✕
           </button>
           <div className="flex items-start justify-between gap-4 pr-6">
-            <div className="min-w-0">
-              <h2 className="font-serif text-2xl text-masters-green leading-tight">
-                {player.name}
-              </h2>
-              {courseLine && <p className="text-sm text-gray-500 mt-0.5">{courseLine}</p>}
-              {player.owner && (
-                <span
-                  className={`inline-flex items-center gap-1.5 mt-2 text-xs font-semibold rounded-md px-2 py-1 ${color.bg} ${color.text}`}
-                >
-                  <span className={`w-2 h-2 rounded-full ${color.dot}`} />
-                  {player.owner}
-                </span>
+            <div className="flex items-start gap-3 min-w-0">
+              {headshot && imgOk && (
+                <img
+                  src={headshot}
+                  alt={player.name}
+                  onError={() => setImgOk(false)}
+                  className="w-14 h-14 rounded-full object-cover bg-masters-green-light border border-masters-green-light shrink-0"
+                />
               )}
+              <div className="min-w-0">
+                <h2 className="font-serif text-2xl text-masters-green leading-tight">
+                  {player.name}
+                </h2>
+                {courseLine && <p className="text-sm text-gray-500 mt-0.5">{courseLine}</p>}
+                {player.owner && (
+                  <span
+                    className={`inline-flex items-center gap-1.5 mt-2 text-xs font-semibold rounded-md px-2 py-1 ${color.bg} ${color.text}`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${color.dot}`} />
+                    {player.owner}
+                  </span>
+                )}
+              </div>
             </div>
             <div className="text-right shrink-0">
               <div className={`font-serif text-4xl font-bold ${scoreColor(data?.total)}`}>

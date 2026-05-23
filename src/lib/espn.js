@@ -43,10 +43,18 @@ export async function fetchEspnLeaderboard() {
 
   const rows = competitors.map((c, i) => {
     const name = c.athlete?.displayName || c.athlete?.fullName || '';
-    const statusType = c.status?.type?.name || '';
+    // ESPN marks a missed-cut player with type.name "STATUS_CUT" and
+    // description "Missed Cut" (shortDetail "CUT"); a withdrawal carries the same
+    // STATUS_CUT name but description "Withdrawn". Match loosely so we don't miss
+    // either (the old /\bcut\b/ never matched "STATUS_CUT", so nobody was cut).
+    const st = c.status?.type || {};
+    const statusName = st.name || '';
+    const statusDesc = st.description || '';
+    const statusShort = st.shortDetail || '';
     let status = 'active';
-    if (/withdraw/i.test(statusType) || c.status?.type?.shortDetail === 'WD') status = 'wd';
-    if (/\bcut\b/i.test(statusType) || c.status?.type?.description === 'Cut') status = 'cut';
+    if (/cut/i.test(statusName) || /cut/i.test(statusDesc) || statusShort === 'CUT') status = 'cut';
+    // Check withdrawal last so it wins when both flags are present.
+    if (/withdraw/i.test(statusName) || /withdraw/i.test(statusDesc) || statusShort === 'WD') status = 'wd';
 
     // Per-round TO-PAR straight from ESPN's linescores. Each played round carries
     // a displayValue ("-4", "E", "+2"); a round mid-play shows its to-par so far,
@@ -65,7 +73,7 @@ export async function fetchEspnLeaderboard() {
       total,
       score: formatToPar(total),
       thru: thruLabel(c.status),
-      inProgress: /in_progress/i.test(statusType),
+      inProgress: /in_progress/i.test(statusName),
       status,
       rounds,
       sortOrder: c.sortOrder ?? i, // ESPN's leaderboard order

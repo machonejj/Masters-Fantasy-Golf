@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { usePoolData } from '@/lib/usePoolData';
 import { Loading, PageHeader } from '@/app/page';
-import { golferTotal, scoreText, scoreColor } from '@/lib/scoring';
+import { adjustedTotal, scoreText, scoreColor, liveRoundIndex } from '@/lib/scoring';
 import { teamColor } from '@/lib/teamColors';
 import PlayerScorecard from '@/components/PlayerScorecard';
 
@@ -23,9 +23,7 @@ export default function FieldPage() {
   }
   const caret = (key) => (sort.key === key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : '');
 
-  const opts = settings
-    ? { coursePar: settings.course_par, cutPenalty: settings.cut_penalty }
-    : {};
+  const opts = settings ? { coursePar: settings.course_par } : {};
 
   async function loadLive() {
     setLive((l) => ({ ...l, status: 'loading' }));
@@ -63,7 +61,10 @@ export default function FieldPage() {
       golfers.map((g) => {
         const lv = live.rows[g.name.toLowerCase()];
         const rounds = lv?.rounds ?? [g.r1, g.r2, g.r3, g.r4];
-        const total = lv?.total ?? golferTotal(g, opts);
+        const status = lv?.status ?? g.status;
+        // Use the penalty-adjusted total so cut golfers carry +8 per missed
+        // round (ESPN's live total is just their real to-par through the cut).
+        const total = adjustedTotal(rounds, status, opts);
         return {
           g,
           athleteId: lv?.athleteId ?? null,
@@ -71,7 +72,7 @@ export default function FieldPage() {
           rounds,
           total,
           thru: lv?.thru ?? g.thru ?? '—',
-          status: lv?.status ?? g.status,
+          status,
         };
       }),
     [golfers, live, ownerByGolfer, opts]
@@ -223,6 +224,7 @@ export default function FieldPage() {
               const color = teamColor(r.owner?.seed);
               const isCut = r.status === 'cut' || r.status === 'wd';
               const thruNum = /^\d+$/.test(String(r.thru));
+              const liveIdx = liveRoundIndex(r.rounds, r.thru, r.status);
               const clickable = !!r.athleteId;
               return (
                 <Fragment key={r.g.id}>
@@ -238,7 +240,11 @@ export default function FieldPage() {
                   }
                   className={`border-t border-masters-green-light/60 ${
                     r.owner ? `border-l-2 ${color.borderL}` : 'border-l-2 border-l-transparent'
-                  } ${clickable ? 'cursor-pointer hover:bg-masters-green-pale/60' : ''}`}
+                  } ${isCut ? 'bg-red-50' : ''} ${
+                    clickable
+                      ? `cursor-pointer ${isCut ? 'hover:bg-red-100/70' : 'hover:bg-masters-green-pale/60'}`
+                      : ''
+                  }`}
                 >
                   <td className="pl-3 pr-1 py-2 text-center font-bold text-masters-green whitespace-nowrap">
                     {positionByGolfer[r.g.id] || '–'}
@@ -263,14 +269,43 @@ export default function FieldPage() {
                   >
                     {isCut ? (r.status === 'wd' ? 'WD' : 'CUT') : r.thru}
                   </td>
-                  {[0, 1, 2, 3].map((ri) => (
-                    <td
-                      key={ri}
-                      className={`px-1 py-2 text-center text-xs ${scoreColor(r.rounds?.[ri] ?? null)}`}
-                    >
-                      {scoreText(r.rounds?.[ri] ?? null)}
-                    </td>
-                  ))}
+                  {[0, 1, 2, 3].map((ri) => {
+                    const v = r.rounds?.[ri];
+                    const empty = v === null || v === undefined || v === '';
+                    if (empty && isCut) {
+                      return (
+                        <td
+                          key={ri}
+                          className="px-1 py-2 text-center text-xs font-semibold text-score-over"
+                        >
+                          MC
+                        </td>
+                      );
+                    }
+                    // The round in play right now: gold tint + a pulsing dot, so a
+                    // live score reads differently from a finished (final) one.
+                    if (ri === liveIdx) {
+                      return (
+                        <td key={ri} className="px-1 py-2 text-center text-xs bg-masters-gold-light">
+                          <span
+                            className={`inline-flex items-center gap-0.5 font-semibold ${scoreColor(v ?? null)}`}
+                            title={`Round ${ri + 1} · live (thru ${r.thru})`}
+                          >
+                            <span className="w-1 h-1 rounded-full bg-masters-gold animate-pulse" />
+                            {scoreText(v ?? null)}
+                          </span>
+                        </td>
+                      );
+                    }
+                    return (
+                      <td
+                        key={ri}
+                        className={`px-1 py-2 text-center text-xs ${scoreColor(v ?? null)}`}
+                      >
+                        {scoreText(v ?? null)}
+                      </td>
+                    );
+                  })}
                   <td className={`pr-3 pl-1 py-2 text-right font-serif font-bold ${scoreColor(r.total)}`}>
                     {scoreText(r.total)}
                   </td>

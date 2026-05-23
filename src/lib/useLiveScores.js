@@ -49,5 +49,6 @@ export function mergeLive(golfer, liveMap) {
     r4: r[3] ?? null,
     status: lv.status ?? golfer.status,
     thru: lv.thru ?? golfer.thru,
+    athleteId: lv.athleteId ?? golfer.athleteId ?? null,
   };
 }
