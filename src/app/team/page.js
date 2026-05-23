@@ -1,15 +1,35 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usePoolData } from '@/lib/usePoolData';
 import { Loading, PageHeader } from '@/app/page';
 import { teamData, scoreText, scoreColor } from '@/lib/scoring';
 import { useLiveScores, mergeLive } from '@/lib/useLiveScores';
 import PlayerScorecard from '@/components/PlayerScorecard';
+import ProbChart from '@/components/ProbChart';
 
 export default function MyTeamPage() {
   const { loading, user, settings, participants, golfers, picks } = usePoolData();
   const [selected, setSelected] = useState(null); // golfer to show scorecard for
+  const [odds, setOdds] = useState({ status: 'loading', series: [], baseline: 0 });
+
+  // Hole-by-hole win-probability line (computed server-side from ESPN scorecards).
+  useEffect(() => {
+    let alive = true;
+    const load = () =>
+      fetch('/api/team/odds')
+        .then((r) => r.json())
+        .then((d) => {
+          if (alive) setOdds({ status: 'ok', series: d.series || [], baseline: d.baseline || 0 });
+        })
+        .catch(() => alive && setOdds((s) => ({ ...s, status: 'error' })));
+    load();
+    const t = setInterval(load, 120000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, []);
 
   // Live ESPN scores so the roster + standing stay current automatically.
   const { live } = useLiveScores();
@@ -55,6 +75,12 @@ export default function MyTeamPage() {
   return (
     <div>
       <PageHeader title="My Team" subtitle={me.display_name} />
+
+      {odds.series.length >= 2 && (
+        <div className="card mb-5">
+          <ProbChart series={odds.series} baseline={odds.baseline} />
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-3 mb-5">
         <Stat label="Team Score" value={scoreText(data.teamScore)} accent={scoreColor(data.teamScore)} />
