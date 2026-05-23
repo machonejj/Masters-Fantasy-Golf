@@ -2,16 +2,35 @@
 
 import { teamColor } from '@/lib/teamColors';
 
+// Clip a team's win-prob series to the field's current progress `now` (in
+// tournament holes, 0–72). Without this, every line runs to the single furthest
+// golfer's hole (e.g. a leader who finished R3 → hole 54), so the end dots land
+// at the end of R3 even though the field is mid-round. We interpolate the
+// win-prob exactly at `now` so the dot sits right on the dashed "now" marker,
+// and drop later holes so future rounds stay empty.
+function clipSeries(series, now) {
+  if (now == null) return series;
+  const kept = series.filter((s) => s.hole <= now);
+  if (kept.length === 0) return series.slice(0, 1);
+  const last = kept[kept.length - 1];
+  const next = series.find((s) => s.hole > now);
+  if (!next || last.hole === now) return kept;
+  const f = (now - last.hole) / (next.hole - last.hole);
+  return [...kept, { hole: now, pct: last.pct + f * (next.pct - last.pct) }];
+}
+
 // Kalshi-style win-probability race: one line per team (team-colored), with a
 // 1/N even-odds baseline. teams: [{ id, name, seed, series:[{hole,pct}] }].
 // highlightId (optional) draws that team's line bolder and fades the rest.
-export default function ProbChart({ teams, baseline = 0, highlightId = null, compact = false }) {
+// now (optional, 0–72 tournament holes) draws a live "where the field is" marker
+// so a single leader finishing a round doesn't make the round look complete.
+export default function ProbChart({ teams, baseline = 0, highlightId = null, compact = false, now = null }) {
   const valid = (teams || []).filter((t) => t.series && t.series.length >= 2);
   if (valid.length === 0) return null;
 
   const W = 320;
   const H = compact ? 74 : 140;
-  const padL = 6;
+  const padL = 24; // room for the Y-axis percentage labels
   const padR = 6;
   const padT = compact ? 6 : 10;
   const padB = compact ? 13 : 18;
@@ -22,26 +41,77 @@ export default function ProbChart({ teams, baseline = 0, highlightId = null, com
   const y = (p) => padT + (1 - p) * (H - padT - padB);
 
   const rounds = [1, 2, 3, 4].map((r) => ({ r, label: `R${r}` }));
+  const yTicks = compact ? [1, 0.5, 0] : [1, 0.75, 0.5, 0.25, 0];
 
-  // Legend sorted by current probability (leader first).
+  // Live field progress → "Round 3 · thru 14".
+  const nowRound = now != null ? Math.floor(now / 18) + 1 : null;
+  const nowThru = now != null ? Math.round(now % 18) : null;
+  const progressLabel =
+    now == null
+      ? null
+      : nowThru === 0 && nowRound > 1
+        ? `Round ${nowRound - 1} complete`
+        : `Round ${nowRound} · thru ${nowThru}`;
+
+  // Legend sorted by current probability (leader first). Each series is clipped
+  // to the field's current progress so the line + end dot stop at "now".
   const legend = valid
-    .map((t) => ({
-      ...t,
-      cur: t.series[t.series.length - 1].pct,
-      color: teamColor(t.seed).hex || '#2f6b40',
-    }))
+    .map((t) => {
+      const series = clipSeries(t.series, now);
+      return {
+        ...t,
+        series,
+        cur: series[series.length - 1].pct,
+        color: teamColor(t.seed).hex || '#2f6b40',
+      };
+    })
     .sort((a, b) => b.cur - a.cur);
 
   return (
     <div>
-      <div className="text-[11px] uppercase tracking-wide text-gray-400 mb-2">
-        Win probability · to win the pool
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <span className="text-[11px] uppercase tracking-wide text-gray-400">
+          Win probability · to win the pool
+        </span>
+        {progressLabel && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-masters-gold whitespace-nowrap">
+            <span className="w-1.5 h-1.5 rounded-full bg-masters-gold animate-pulse" />
+            {progressLabel}
+          </span>
+        )}
       </div>
 
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none">
+        {/* Horizontal probability gridlines + Y-axis % labels */}
+        {yTicks.map((p) => (
+          <g key={p}>
+            <line
+              x1={padL}
+              x2={W - padR}
+              y1={y(p)}
+              y2={y(p)}
+              stroke="#eef1ee"
+              strokeWidth="1"
+            />
+            <text
+              x={padL - 4}
+              y={y(p)}
+              textAnchor="end"
+              dominantBaseline="middle"
+              fontSize={compact ? 7 : 8}
+              fill="#9ca3af"
+            >
+              {Math.round(p * 100)}%
+            </text>
+          </g>
+        ))}
+
+        {/* Round dividers */}
         {[18, 36, 54].map((h) => (
           <line key={h} x1={x(h)} x2={x(h)} y1={padT} y2={H - padB} stroke="#e5e7eb" strokeWidth="1" />
         ))}
+
+        {/* Even-odds baseline */}
         <line
           x1={padL}
           x2={W - padR}
@@ -51,6 +121,22 @@ export default function ProbChart({ teams, baseline = 0, highlightId = null, com
           strokeWidth="1"
           strokeDasharray="3 3"
         />
+
+        {/* Live "now" marker — where the field currently is */}
+        {now != null && (
+          <g>
+            <line
+              x1={x(now)}
+              x2={x(now)}
+              y1={padT}
+              y2={H - padB}
+              stroke="#c9a84c"
+              strokeWidth="1"
+              strokeDasharray="2 2"
+            />
+            <circle cx={x(now)} cy={padT} r="1.7" fill="#c9a84c" className="animate-pulse" />
+          </g>
+        )}
 
         {/* draw non-highlighted first, highlighted on top */}
         {legend

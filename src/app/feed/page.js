@@ -100,7 +100,7 @@ export default function LiveFeedPage() {
 
       {teams.length > 0 && (
         <div className="card mb-4">
-          <ProbChart teams={teams} baseline={data.baseline} highlightId={myId} compact />
+          <ProbChart teams={teams} baseline={data.baseline} highlightId={myId} now={data.now} compact />
         </div>
       )}
 

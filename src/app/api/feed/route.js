@@ -109,6 +109,17 @@ export async function GET() {
   const finalTotals = {};
   for (const t of teams) finalTotals[t.id] = teamTotal(t.id);
 
+  // Where the field is "right now" for the win-prob chart: the average holes
+  // played by active golfers (e.g. 50.3 → Round 3, ~14 holes in). Drives a live
+  // progress marker so a leader finishing a round doesn't read as "round done".
+  const activeHoles = teams
+    .flatMap((t) => t.golfers)
+    .filter((g) => g.status !== 'cut' && g.status !== 'wd' && g.holesPlayed > 0)
+    .map((g) => g.holesPlayed);
+  const now = activeHoles.length
+    ? activeHoles.reduce((a, b) => a + b, 0) / activeHoles.length
+    : null;
+
   // Newest first (approximated by round then hole — ESPN gives no hole time).
   const events = [...all]
     .sort((a, b) => b.round - a.round || b.hole - a.hole)
@@ -132,6 +143,7 @@ export async function GET() {
       series: seriesByTeam[p.id] || [],
     })),
     counting,
+    now,
     baseline: 1 / (participants.length || 1),
     myTeamId: me?.id ?? null,
     updatedAt: new Date().toISOString(),
