@@ -72,11 +72,23 @@ export async function fetchEspnLeaderboard() {
     };
   });
 
+  // Projected cut line, straight from ESPN (e.g. top 70 & ties at -6 after R2).
+  const t = event?.tournament;
+  const cut =
+    t && t.cutScore !== undefined && t.cutScore !== null
+      ? {
+          round: t.cutRound ?? null,
+          score: typeof t.cutScore === 'number' ? t.cutScore : parseToPar(t.cutScore),
+          count: t.cutCount ?? null,
+        }
+      : null;
+
   return {
     tournament: event?.name || null,
     eventId: event?.id || null,
     competitionId: competition?.id || null,
     coursePar,
+    cut,
     course: course
       ? { name: course.name, city: course.address?.city, state: course.address?.state }
       : null,

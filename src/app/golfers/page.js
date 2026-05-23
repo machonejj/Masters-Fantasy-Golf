@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { usePoolData } from '@/lib/usePoolData';
 import { Loading, PageHeader } from '@/app/page';
 import { golferTotal, scoreText, scoreColor } from '@/lib/scoring';
@@ -11,7 +11,7 @@ const FILTERS = ['all', 'drafted'];
 
 export default function FieldPage() {
   const { loading, settings, golfers, picks, participants } = usePoolData();
-  const [live, setLive] = useState({ rows: {}, status: 'idle', updatedAt: null });
+  const [live, setLive] = useState({ rows: {}, status: 'idle', updatedAt: null, cut: null });
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null); // { name, owner, athleteId, teamSeed }
@@ -35,7 +35,7 @@ export default function FieldPage() {
       if (!res.ok) throw new Error(data.error || 'failed');
       const map = {};
       for (const c of data.competitors || []) map[c.name.toLowerCase()] = c;
-      setLive({ rows: map, status: 'ok', updatedAt: data.updatedAt });
+      setLive({ rows: map, status: 'ok', updatedAt: data.updatedAt, cut: data.cut ?? null });
     } catch {
       setLive((l) => ({ ...l, status: 'error' }));
     }
@@ -57,22 +57,44 @@ export default function FieldPage() {
     return m;
   }, [picks, participants]);
 
-  const rows = useMemo(() => {
-    const merged = golfers.map((g) => {
-      const lv = live.rows[g.name.toLowerCase()];
-      const rounds = lv?.rounds ?? [g.r1, g.r2, g.r3, g.r4];
-      const total = lv?.total ?? golferTotal(g, opts);
-      return {
-        g,
-        athleteId: lv?.athleteId ?? null,
-        owner: ownerByGolfer[g.id] || null,
-        rounds,
-        total,
-        thru: lv?.thru ?? g.thru ?? '—',
-        status: lv?.status ?? g.status,
-      };
-    });
+  // Merge each golfer with live scores (live wins when the player is in the field).
+  const merged = useMemo(
+    () =>
+      golfers.map((g) => {
+        const lv = live.rows[g.name.toLowerCase()];
+        const rounds = lv?.rounds ?? [g.r1, g.r2, g.r3, g.r4];
+        const total = lv?.total ?? golferTotal(g, opts);
+        return {
+          g,
+          athleteId: lv?.athleteId ?? null,
+          owner: ownerByGolfer[g.id] || null,
+          rounds,
+          total,
+          thru: lv?.thru ?? g.thru ?? '—',
+          status: lv?.status ?? g.status,
+        };
+      }),
+    [golfers, live, ownerByGolfer, opts]
+  );
 
+  // Golf-style leaderboard position by total, with ties → 1, T2, T2, 4 …
+  const positionByGolfer = useMemo(() => {
+    const scored = merged
+      .filter((r) => r.total !== null && r.status !== 'cut' && r.status !== 'wd')
+      .sort((a, b) => a.total - b.total);
+    const m = {};
+    let i = 0;
+    while (i < scored.length) {
+      let j = i;
+      while (j < scored.length && scored[j].total === scored[i].total) j++;
+      const label = (j - i > 1 ? 'T' : '') + (i + 1); // T-prefix when tied
+      for (let k = i; k < j; k++) m[scored[k].g.id] = label;
+      i = j;
+    }
+    return m;
+  }, [merged]);
+
+  const rows = useMemo(() => {
     const filtered = merged.filter((r) => {
       if (!r.g.name.toLowerCase().includes(search.toLowerCase())) return false;
       if (filter === 'drafted') return !!r.owner;
@@ -116,9 +138,21 @@ export default function FieldPage() {
       // Tie-break by total, then name.
       return (a.total ?? 999) - (b.total ?? 999) || a.g.name.localeCompare(b.g.name);
     });
-  }, [golfers, live, ownerByGolfer, filter, search, opts, sort]);
+  }, [merged, filter, search, sort]);
 
   if (loading) return <Loading />;
+
+  // Projected cut line (from ESPN). The divider is shown only on the full,
+  // total-sorted board, where row order reflects the actual standings.
+  const cut = live.cut;
+  const showCutDivider =
+    cut?.score != null && filter === 'all' && sort.key === 'total' && sort.dir === 'asc';
+  let cutIdx = -1;
+  if (showCutDivider) {
+    rows.forEach((r, i) => {
+      if (r.total !== null && r.total <= cut.score) cutIdx = i;
+    });
+  }
 
   return (
     <div>
@@ -154,6 +188,14 @@ export default function FieldPage() {
             {f}
           </button>
         ))}
+        {cut?.score != null && (
+          <span
+            className="chip bg-masters-gold-light text-masters-green"
+            title={`Projected cut${cut.count ? ` — top ${cut.count} & ties` : ''} make the weekend`}
+          >
+            ✂ Proj. cut {scoreText(cut.score)}
+          </span>
+        )}
         <input
           className="input !py-1.5 ml-auto max-w-[180px]"
           placeholder="Search golfer…"
@@ -183,8 +225,8 @@ export default function FieldPage() {
               const thruNum = /^\d+$/.test(String(r.thru));
               const clickable = !!r.athleteId;
               return (
+                <Fragment key={r.g.id}>
                 <tr
-                  key={r.g.id}
                   onClick={() =>
                     clickable &&
                     setSelected({
@@ -198,8 +240,8 @@ export default function FieldPage() {
                     r.owner ? `border-l-2 ${color.borderL}` : 'border-l-2 border-l-transparent'
                   } ${clickable ? 'cursor-pointer hover:bg-masters-green-pale/60' : ''}`}
                 >
-                  <td className="pl-3 pr-1 py-2 text-center font-bold text-masters-green">
-                    {r.total === null ? '–' : i + 1}
+                  <td className="pl-3 pr-1 py-2 text-center font-bold text-masters-green whitespace-nowrap">
+                    {positionByGolfer[r.g.id] || '–'}
                   </td>
                   <td className="px-2 py-2">
                     <div
@@ -233,6 +275,18 @@ export default function FieldPage() {
                     {scoreText(r.total)}
                   </td>
                 </tr>
+                {showCutDivider && i === cutIdx && i < rows.length - 1 && (
+                  <tr className="bg-masters-gold-light/40">
+                    <td
+                      colSpan={8}
+                      className="py-1.5 text-center text-[11px] font-bold uppercase tracking-wide text-amber-700 border-y border-dashed border-amber-500"
+                    >
+                      ✂ Projected cut · {scoreText(cut.score)}
+                      {cut.count ? ` · top ${cut.count}` : ''}
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               );
             })}
             {rows.length === 0 && (
