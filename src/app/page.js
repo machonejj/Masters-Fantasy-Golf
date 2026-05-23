@@ -101,47 +101,56 @@ export default function LeaderboardPage() {
                     {row.golfers.length === 0 ? (
                       <p className="text-sm text-gray-400 py-2">No golfers drafted yet.</p>
                     ) : (
-                      [...row.withScores]
-                        .sort((a, b) => (a.score ?? 999) - (b.score ?? 999))
-                        .map(({ g, score }) => {
-                          const counts = row.countingSet.has(g.id);
-                          return (
-                            <div
-                              key={g.id}
-                              onClick={() =>
-                                setSelected({
-                                  name: g.name,
-                                  owner: row.p.display_name,
-                                  teamSeed: row.p.draft_position,
-                                })
-                              }
-                              className="flex items-center gap-2 py-1.5 text-sm border-t border-masters-green-light/60 first:border-0 cursor-pointer hover:bg-white/60 rounded -mx-1 px-1"
-                            >
-                              <span
-                                className={`chip shrink-0 ${
-                                  counts
-                                    ? 'bg-masters-gold-light text-masters-green'
-                                    : 'bg-gray-100 text-gray-400'
-                                }`}
+                      <>
+                        <div className="flex items-center gap-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-gray-400">
+                          <span className="flex-1" />
+                          <div className="flex gap-1">
+                            {['R1', 'R2', 'R3', 'R4'].map((r) => (
+                              <span key={r} className="w-6 text-center">
+                                {r}
+                              </span>
+                            ))}
+                          </div>
+                          <span className="w-9 text-right">Tot</span>
+                        </div>
+                        {[...row.withScores]
+                          .sort((a, b) => (a.score ?? 999) - (b.score ?? 999))
+                          .map(({ g, score }) => {
+                            const counts = row.countingSet.has(g.id);
+                            return (
+                              <div
+                                key={g.id}
+                                onClick={() =>
+                                  setSelected({
+                                    name: g.name,
+                                    owner: row.p.display_name,
+                                    teamSeed: row.p.draft_position,
+                                  })
+                                }
+                                className="flex items-center gap-2 py-1.5 text-sm border-t border-masters-green-light/60 first:border-0 cursor-pointer hover:bg-white/60 rounded -mx-1 px-1"
                               >
-                                {counts ? 'counts' : 'drop'}
-                              </span>
-                              <span
-                                className={`flex-1 min-w-0 truncate ${
-                                  g.status !== 'active' ? 'text-gray-400 line-through' : ''
-                                }`}
-                              >
-                                {g.name}
-                                {g.status === 'cut' && ' (CUT)'}
-                                {g.status === 'wd' && ' (WD)'}
-                              </span>
-                              <RoundBoxes g={g} />
-                              <span className={`w-9 text-right font-semibold ${scoreColor(score)}`}>
-                                {scoreText(score)}
-                              </span>
-                            </div>
-                          );
-                        })
+                                {counts && (
+                                  <span className="chip shrink-0 bg-masters-gold-light text-masters-green">
+                                    counts
+                                  </span>
+                                )}
+                                <span
+                                  className={`flex-1 min-w-0 truncate ${
+                                    g.status !== 'active' ? 'text-gray-400 line-through' : ''
+                                  }`}
+                                >
+                                  {g.name}
+                                  {g.status === 'cut' && ' (CUT)'}
+                                  {g.status === 'wd' && ' (WD)'}
+                                </span>
+                                <RoundBoxes g={g} />
+                                <span className={`w-9 text-right font-semibold ${scoreColor(score)}`}>
+                                  {scoreText(score)}
+                                </span>
+                              </div>
+                            );
+                          })}
+                      </>
                     )}
                   </div>
                 )}
@@ -178,14 +187,14 @@ export function PageHeader({ title, subtitle, action }) {
 // screens so the golfer row stays readable.
 function RoundBoxes({ g }) {
   return (
-    <div className="hidden sm:flex gap-1 shrink-0">
+    <div className="flex gap-1 shrink-0">
       {[g.r1, g.r2, g.r3, g.r4].map((v, i) => {
         const has = v !== null && v !== undefined && v !== '';
         return (
           <span
             key={i}
             title={`R${i + 1}`}
-            className={`w-7 text-center text-[10px] rounded py-0.5 ${
+            className={`w-6 text-center text-[10px] rounded py-0.5 ${
               has ? `bg-white ${scoreColor(Number(v))}` : 'bg-gray-50 text-gray-300'
             }`}
           >
