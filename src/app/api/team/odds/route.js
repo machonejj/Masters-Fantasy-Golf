@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { fetchEspnLeaderboard, fetchEspnScorecard } from '@/lib/espn';
-import { teamWinSeries } from '@/lib/winProbability';
+import { allTeamWinSeries } from '@/lib/winProbability';
 
 // Cumulative to-par after each hole, from a player's ESPN scorecard.
 function cumFromHoles(card) {
@@ -41,15 +41,14 @@ export async function GET() {
   const [{ data: state }, { data: participants }, { data: picks }, { data: golfers }] =
     await Promise.all([
       db.from('draft_state').select('counting_scores, cut_penalty').eq('id', 1).maybeSingle(),
-      db.from('participants').select('id, user_id'),
+      db.from('participants').select('id, user_id, display_name, draft_position'),
       db.from('picks').select('participant_id, golfer_id'),
       db.from('golfers').select('id, name, r1, r2, r3, r4, status'),
     ]);
 
   const me = (participants || []).find((p) => p.user_id === ctx.user.id);
-  if (!me) return NextResponse.json({ series: [], reason: 'no-team' });
   if (!participants?.length || !picks?.length) {
-    return NextResponse.json({ series: [], reason: 'no-draft' });
+    return NextResponse.json({ teams: [], reason: 'no-draft' });
   }
 
   let board = null;
@@ -96,16 +95,21 @@ export async function GET() {
       }),
   }));
 
-  const series = teamWinSeries(teams, me.id, {
+  const seriesByTeam = allTeamWinSeries(teams, {
     counting: state?.counting_scores ?? 3,
     cutPenalty: state?.cut_penalty ?? 16,
     sims: 800,
   });
 
   return NextResponse.json({
-    series,
+    teams: participants.map((p) => ({
+      id: p.id,
+      name: p.display_name,
+      seed: p.draft_position,
+      series: seriesByTeam[p.id] || [],
+    })),
     baseline: 1 / (participants.length || 1),
-    teamCount: participants.length,
+    myTeamId: me?.id ?? null,
     updatedAt: new Date().toISOString(),
   });
 }

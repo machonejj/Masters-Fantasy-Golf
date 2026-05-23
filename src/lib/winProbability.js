@@ -59,19 +59,20 @@ function winProbAtHole(teams, T, { counting, cutPenalty, sims }) {
   return out;
 }
 
-// A team's win-probability line: 1/N at the start, then a point per hole played.
-export function teamWinSeries(teams, myId, { counting = 3, cutPenalty = 16, sims = 800 } = {}) {
+// Every team's win-probability line in one pass: 1/N at the start, then a point
+// per hole played. Returns { [teamId]: [{ hole, pct }] }.
+export function allTeamWinSeries(teams, { counting = 3, cutPenalty = 16, sims = 800 } = {}) {
   const n = teams.length;
-  if (n === 0) return [];
+  if (n === 0) return {};
 
   let maxT = 0;
   for (const t of teams) for (const g of t.golfers) maxT = Math.max(maxT, g.holesPlayed);
   maxT = Math.min(maxT, TOTAL_HOLES);
 
-  const series = [{ hole: 0, pct: 1 / n }];
+  const out = Object.fromEntries(teams.map((t) => [t.id, [{ hole: 0, pct: 1 / n }]]));
   for (let T = 1; T <= maxT; T++) {
     const p = winProbAtHole(teams, T, { counting, cutPenalty, sims });
-    series.push({ hole: T, pct: p[myId] ?? 0 });
+    for (const t of teams) out[t.id].push({ hole: T, pct: p[t.id] ?? 0 });
   }
-  return series;
+  return out;
 }

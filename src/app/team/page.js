@@ -11,18 +11,19 @@ import ProbChart from '@/components/ProbChart';
 export default function MyTeamPage() {
   const { loading, user, settings, participants, golfers, picks } = usePoolData();
   const [selected, setSelected] = useState(null); // golfer to show scorecard for
-  const [odds, setOdds] = useState({ status: 'loading', series: [], baseline: 0 });
+  const [odds, setOdds] = useState({ teams: [], baseline: 0, myTeamId: null });
 
-  // Hole-by-hole win-probability line (computed server-side from ESPN scorecards).
+  // Hole-by-hole win-probability lines for every team (server-side from ESPN scorecards).
   useEffect(() => {
     let alive = true;
     const load = () =>
       fetch('/api/team/odds')
         .then((r) => r.json())
         .then((d) => {
-          if (alive) setOdds({ status: 'ok', series: d.series || [], baseline: d.baseline || 0 });
+          if (alive)
+            setOdds({ teams: d.teams || [], baseline: d.baseline || 0, myTeamId: d.myTeamId || null });
         })
-        .catch(() => alive && setOdds((s) => ({ ...s, status: 'error' })));
+        .catch(() => {});
     load();
     const t = setInterval(load, 120000);
     return () => {
@@ -76,9 +77,9 @@ export default function MyTeamPage() {
     <div>
       <PageHeader title="My Team" subtitle={me.display_name} />
 
-      {odds.series.length >= 2 && (
+      {odds.teams.length > 0 && (
         <div className="card mb-5">
-          <ProbChart series={odds.series} baseline={odds.baseline} />
+          <ProbChart teams={odds.teams} baseline={odds.baseline} highlightId={odds.myTeamId} />
         </div>
       )}
 

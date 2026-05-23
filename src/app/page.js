@@ -1,16 +1,36 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usePoolData } from '@/lib/usePoolData';
 import { teamData, scoreText, scoreColor, golferTotal } from '@/lib/scoring';
 import { teamColor } from '@/lib/teamColors';
 import { useLiveScores, mergeLive } from '@/lib/useLiveScores';
 import PlayerScorecard from '@/components/PlayerScorecard';
+import ProbChart from '@/components/ProbChart';
 
 export default function LeaderboardPage() {
   const { loading, settings, participants, golfers, picks } = usePoolData();
   const [expanded, setExpanded] = useState(null);
   const [selected, setSelected] = useState(null); // golfer to show scorecard for
+  const [odds, setOdds] = useState({ teams: [], baseline: 0 });
+
+  // All-teams win-probability lines (server-side from ESPN scorecards).
+  useEffect(() => {
+    let alive = true;
+    const load = () =>
+      fetch('/api/team/odds')
+        .then((r) => r.json())
+        .then((d) => {
+          if (alive) setOdds({ teams: d.teams || [], baseline: d.baseline || 0 });
+        })
+        .catch(() => {});
+    load();
+    const t = setInterval(load, 120000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, []);
 
   // Live ESPN scores, refreshed on an interval, so standings stay current.
   const { live, updatedAt } = useLiveScores();
@@ -52,6 +72,12 @@ export default function LeaderboardPage() {
           ) : null
         }
       />
+
+      {odds.teams.length > 0 && (
+        <div className="card mb-5">
+          <ProbChart teams={odds.teams} baseline={odds.baseline} />
+        </div>
+      )}
 
       {standings.length === 0 ? (
         <div className="card text-center text-gray-500">
