@@ -201,7 +201,7 @@ function Participants({ participants, settings, busy, run, flash }) {
     if (!code) return;
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const text =
-      `⛳ You're in the Masters Fantasy Golf pool${playerName ? `, ${playerName}` : ''}!\n\n` +
+      `⛳ You're in the Augusta Pickem pool${playerName ? `, ${playerName}` : ''}!\n\n` +
       `Log in here: ${origin}\n` +
       `Your access code: ${code}\n\n` +
       `Just enter the code — no password needed.`;

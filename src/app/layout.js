@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import NavBar from '@/components/NavBar';
 
 export const metadata = {
-  title: 'Masters Fantasy Golf',
+  title: 'Augusta Pickem',
   description: 'Snake draft fantasy golf pool — best 3 of 6 count.',
   manifest: '/manifest.json',
 };

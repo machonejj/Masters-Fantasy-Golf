@@ -1,6 +1,6 @@
 {
-  "name": "Masters Fantasy Golf",
-  "short_name": "Fantasy Golf",
+  "name": "Augusta Pickem",
+  "short_name": "Augusta Pickem",
   "description": "Snake draft fantasy golf pool — best 3 of 6 count.",
   "start_url": "/",
   "display": "standalone",
