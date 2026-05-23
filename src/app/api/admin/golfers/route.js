@@ -3,6 +3,8 @@ import { requireAdmin } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { DEFAULT_GOLFERS } from '@/lib/golfers-seed';
 import { fetchEspnLeaderboard, espnToParRounds } from '@/lib/espn';
+import { getActiveEventId } from '@/lib/activeEvent';
+import { fetchWorldRankings, normalizeName } from '@/lib/rankings';
 
 export async function POST(request) {
   const ctx = await requireAdmin();
@@ -37,14 +39,78 @@ export async function POST(request) {
     return NextResponse.json({ ok: true, golfer: data });
   }
 
-  if (body.action === 'syncLive') {
+  // Guided "set up next tournament": point the pool at a specific ESPN event,
+  // reset the draft, clear the old field, and load the new event's field.
+  if (body.action === 'setupTournament') {
+    const eventId = String(body.eventId || '').trim();
+    if (!eventId) return NextResponse.json({ error: 'eventId required' }, { status: 400 });
+
     let board;
     try {
-      board = await fetchEspnLeaderboard();
+      board = await fetchEspnLeaderboard(eventId);
     } catch (err) {
       return NextResponse.json({ error: err.message }, { status: 502 });
     }
 
+    // Save the selection FIRST so that if the event_id column is missing we bail
+    // before touching the existing draft/field (nothing destroyed).
+    const { error: stateErr } = await db
+      .from('draft_state')
+      .update({
+        event_id: eventId,
+        status: 'pending',
+        current_pick: 0,
+        pick_deadline: null,
+        paused_remaining_seconds: null,
+        tournament_name: board.tournament || 'Tournament',
+        course_par: board.coursePar || 72,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', 1);
+    if (stateErr) {
+      return NextResponse.json(
+        {
+          error: `Couldn't save the tournament selection — add the draft_state.event_id column first (no data was changed). (${stateErr.message})`,
+        },
+        { status: 500 }
+      );
+    }
+
+    // Order the field by world ranking (favorites first). Unranked players get
+    // null rank → they sort to the bottom (matches usePoolData's nullsFirst:false).
+    const owgr = await fetchWorldRankings();
+
+    // Now reset the draft and swap in the new field.
+    await db.from('picks').delete().neq('pick_number', -1);
+    await db.from('golfers').delete().neq('name', '');
+    const rows = board.competitors.map((c) => {
+      const [r1, r2, r3, r4] = espnToParRounds(c);
+      return {
+        name: c.name,
+        rank: owgr.get(normalizeName(c.name)) ?? null,
+        status: c.status,
+        thru: c.thru,
+        today: c.score,
+        r1,
+        r2,
+        r3,
+        r4,
+      };
+    });
+    if (rows.length) await db.from('golfers').insert(rows);
+
+    return NextResponse.json({ ok: true, tournament: board.tournament, field: rows.length });
+  }
+
+  if (body.action === 'syncLive') {
+    let board;
+    try {
+      board = await fetchEspnLeaderboard(await getActiveEventId(db));
+    } catch (err) {
+      return NextResponse.json({ error: err.message }, { status: 502 });
+    }
+
+    const owgr = await fetchWorldRankings();
     const { data: golfers } = await db.from('golfers').select('*');
     const byName = new Map((golfers || []).map((g) => [g.name.toLowerCase(), g]));
 
@@ -58,8 +124,8 @@ export async function POST(request) {
         await db.from('golfers').update(patch).eq('id', g.id);
         updated++;
       } else {
-        // New to the field — add them (rank from the live leaderboard order).
-        toInsert.push({ name: c.name, rank: c.sortOrder + 1, ...patch });
+        // New to the field — add them, ranked by world ranking (null if unranked).
+        toInsert.push({ name: c.name, rank: owgr.get(normalizeName(c.name)) ?? null, ...patch });
       }
     }
     if (toInsert.length) await db.from('golfers').insert(toInsert);

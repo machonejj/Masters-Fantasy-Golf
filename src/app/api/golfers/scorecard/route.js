@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { fetchEspnLeaderboard, fetchEspnScorecard } from '@/lib/espn';
+import { getActiveEventId } from '@/lib/activeEvent';
 
 // Per-player scorecard for the detail modal: tournament/course meta plus the
 // player's round + hole-by-hole breakdown. Read-only; any signed-in user.
@@ -16,7 +17,7 @@ export async function GET(request) {
   }
 
   try {
-    const board = await fetchEspnLeaderboard();
+    const board = await fetchEspnLeaderboard(await getActiveEventId());
     if (!board.eventId || !board.competitionId) {
       return NextResponse.json({ error: 'No live event right now.' }, { status: 404 });
     }

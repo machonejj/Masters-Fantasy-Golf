@@ -42,6 +42,7 @@ create table public.draft_state (
   course_par               int not null default 72,
   pick_timer_seconds       int not null default 3600,         -- 1 hour
   tournament_name          text not null default 'The Masters',
+  event_id                 text,                              -- ESPN event id the pool is set to (null = follow current)
   updated_at               timestamptz not null default now()
 );
 

@@ -64,6 +64,7 @@ export default function AdminPage() {
         </div>
       )}
 
+      <TournamentPicker settings={settings} golfers={golfers} busy={busy} run={run} flash={flash} />
       <DraftControls
         settings={settings}
         participants={participants}
@@ -87,6 +88,109 @@ export default function AdminPage() {
         flash={flash}
       />
       <Settings settings={settings} busy={busy} run={run} flash={flash} />
+    </div>
+  );
+}
+
+/* ── Tournament picker ───────────────────────────────────────── */
+function TournamentPicker({ settings, golfers, busy, run, flash }) {
+  const [schedule, setSchedule] = useState(null); // { events, activeEventId, currentEventId }
+  const [sel, setSel] = useState('');
+
+  useEffect(() => {
+    api('/api/admin/schedule', 'GET')
+      .then((d) => {
+        setSchedule(d);
+        setSel(d.activeEventId || d.currentEventId || '');
+      })
+      .catch(() => setSchedule({ events: [] }));
+  }, []);
+
+  const now = Date.now();
+  const stateOf = (e) => {
+    const s = e.startDate ? Date.parse(e.startDate) : 0;
+    const end = e.endDate ? Date.parse(e.endDate) : s;
+    if (now < s) return 'upcoming';
+    if (now > end + 36 * 3600 * 1000) return 'past';
+    return 'live';
+  };
+  const fmt = (d) =>
+    d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '';
+
+  function setup(eventId) {
+    const ev = schedule?.events.find((e) => e.id === eventId);
+    run(async () => {
+      if (
+        !window.confirm(
+          `Set up "${ev?.label}"?\n\nThis RESETS the current draft, clears the old field, and loads this tournament's field. The previous tournament's draft will be erased.`
+        )
+      )
+        return;
+      const r = await api('/api/admin/golfers', 'POST', { action: 'setupTournament', eventId });
+      flash('ok', `Loaded ${r.tournament || ev?.label} — ${r.field} golfers. Ready to draft.`);
+    });
+  }
+
+  function refreshField() {
+    run(async () => {
+      const r = await api('/api/admin/golfers', 'POST', { action: 'syncLive' });
+      flash(
+        'ok',
+        `Field refreshed${r.tournament ? ` (${r.tournament})` : ''}: ${r.updated} updated, ${r.inserted} added.`
+      );
+    });
+  }
+
+  return (
+    <div className="card">
+      <div className="card-title">Tournament</div>
+      <div className="text-sm mb-3">
+        Active: <b className="text-masters-green">{settings?.tournament_name || '—'}</b>
+        <span className="text-gray-400"> · {golfers.length} golfers in the field</span>
+        {schedule && !schedule.activeEventId && (
+          <span className="text-gray-400"> · following ESPN’s current event</span>
+        )}
+      </div>
+
+      {!schedule ? (
+        <p className="text-sm text-gray-400">Loading schedule…</p>
+      ) : schedule.events.length === 0 ? (
+        <p className="text-sm text-gray-400">Schedule unavailable right now.</p>
+      ) : (
+        <>
+          <div className="flex flex-wrap gap-2 items-end">
+            <div className="flex-1 min-w-[220px]">
+              <label className="label">Pick a tournament (PGA season)</label>
+              <select className="input" value={sel} onChange={(e) => setSel(e.target.value)}>
+                {schedule.events.map((e) => {
+                  const st = stateOf(e);
+                  const tag = st === 'live' ? ' · live' : st === 'upcoming' ? ' · upcoming' : '';
+                  return (
+                    <option key={e.id} value={e.id}>
+                      {fmt(e.startDate)} — {e.label}
+                      {tag}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+            <button
+              disabled={busy || !sel || sel === (schedule.activeEventId || '')}
+              onClick={() => setup(sel)}
+              className="btn-primary"
+            >
+              Set up tournament
+            </button>
+            <button disabled={busy} onClick={refreshField} className="btn-gold">
+              ↻ Refresh field
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mt-3">
+            Picking a tournament resets the draft and loads its field. Far-out events may show 0
+            golfers until ESPN posts the field — use “Refresh field” as it gets closer.
+          </p>
+        </>
+      )}
     </div>
   );
 }

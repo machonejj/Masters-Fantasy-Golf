@@ -8,7 +8,7 @@ export async function buildPoolLive(userId) {
   const db = createAdminClient();
   const [{ data: settings }, { data: participants }, { data: picks }, { data: golfers }] =
     await Promise.all([
-      db.from('draft_state').select('counting_scores, cut_penalty').eq('id', 1).maybeSingle(),
+      db.from('draft_state').select('*').eq('id', 1).maybeSingle(),
       db.from('participants').select('id, user_id, display_name, draft_position'),
       db.from('picks').select('participant_id, golfer_id'),
       db.from('golfers').select('id, name, r1, r2, r3, r4, status'),
@@ -21,7 +21,7 @@ export async function buildPoolLive(userId) {
 
   let board = null;
   try {
-    board = await fetchEspnLeaderboard();
+    board = await fetchEspnLeaderboard(settings?.event_id ?? null);
   } catch {
     /* fall back to stored rounds */
   }

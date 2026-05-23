@@ -3,7 +3,30 @@
 //   • fetchEspnScorecard()   — one player's round + hole-by-hole detail.
 const LEADERBOARD_URL =
   'https://site.api.espn.com/apis/site/v2/sports/golf/leaderboard?league=pga';
+const SCOREBOARD_URL = 'https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard';
 const CORE_URL = 'https://sports.core.api.espn.com/v2/sports/golf/leagues/pga';
+
+// The PGA season schedule from the scoreboard "calendar" — every event with its
+// id, name, and dates. Used by the admin tournament picker.
+export async function fetchEspnSchedule() {
+  const res = await fetch(SCOREBOARD_URL, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`ESPN responded ${res.status}`);
+  const data = await res.json();
+  const calendar = data.leagues?.[0]?.calendar || [];
+  const events = [];
+  for (const c of calendar) {
+    if (!c || typeof c !== 'object') continue;
+    const id = (c.event?.$ref || '').match(/\/events\/(\d+)/)?.[1] || null;
+    if (!id) continue;
+    events.push({
+      id,
+      label: c.label || '',
+      startDate: c.startDate || null,
+      endDate: c.endDate || null,
+    });
+  }
+  return { events, currentEventId: data.events?.[0]?.id || null };
+}
 
 // "-5" → -5, "E" → 0, "+3" → 3, null/"" → null
 export function parseToPar(s) {
@@ -22,16 +45,24 @@ function formatToPar(n) {
   return n > 0 ? `+${n}` : String(n);
 }
 
-// Holes played in the current round → "F" once complete, a tee time, or "—".
+// Holes played in the current round → "F" once complete, the hole number while
+// playing, or a tee time / "—" before they've started. ESPN reports thru=0 for a
+// player who hasn't teed off (e.g. scheduled for the next round) — we must NOT
+// treat that as "thru 0 holes" (it read as a live "0" and kept the finished round
+// looking live), so thru=0 falls through to the tee time.
 function thruLabel(status) {
   const t = status?.type;
-  if (status?.thru != null) return status.thru >= 18 ? 'F' : String(status.thru);
-  if (/finish|complete|post/i.test(t?.name || '')) return 'F';
+  const thru = status?.thru;
+  if (thru >= 18 || /finish|complete|final|post/i.test(t?.name || '')) return 'F';
+  if (thru != null && thru > 0) return String(thru);
   return t?.shortDetail || '—';
 }
 
-export async function fetchEspnLeaderboard() {
-  const res = await fetch(LEADERBOARD_URL, { next: { revalidate: 0 }, cache: 'no-store' });
+export async function fetchEspnLeaderboard(eventId = null) {
+  const url = eventId
+    ? `${LEADERBOARD_URL}&event=${encodeURIComponent(eventId)}`
+    : LEADERBOARD_URL;
+  const res = await fetch(url, { next: { revalidate: 0 }, cache: 'no-store' });
   if (!res.ok) throw new Error(`ESPN responded ${res.status}`);
   const data = await res.json();
 
