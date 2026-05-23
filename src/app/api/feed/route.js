@@ -75,6 +75,7 @@ export async function GET() {
       for (const h of g.holes)
         all.push({
           golfer: g.name,
+          athleteId: g.athleteId ?? null,
           teamId: t.id,
           team: t.name,
           seed: t.seed,
@@ -82,6 +83,11 @@ export async function GET() {
           hole: h.hole,
           toPar: h.toPar,
           total: h.total,
+          // How many holes this golfer has played SINCE this one (0 = the hole
+          // they just finished). ESPN gives no per-hole timestamps, so this is
+          // the best recency proxy: a golfer's latest hole is "newest", letting
+          // us interleave golfers who are at different holes within a round.
+          recency: g.holesPlayed - ((h.round - 1) * 18 + h.hole),
         });
 
   const enrich = {}; // event key → team transition + highlight flags
@@ -120,9 +126,11 @@ export async function GET() {
     ? activeHoles.reduce((a, b) => a + b, 0) / activeHoles.length
     : null;
 
-  // Newest first (approximated by round then hole — ESPN gives no hole time).
+  // Newest first: latest round, then most-recently-played within the round (by
+  // recency), then higher hole as a tiebreak. Keeps rounds grouped while fixing
+  // the old pure hole-number sort that buried a golfer's recent low-hole play.
   const events = [...all]
-    .sort((a, b) => b.round - a.round || b.hole - a.hole)
+    .sort((a, b) => b.round - a.round || a.recency - b.recency || b.hole - a.hole)
     .slice(0, 80)
     .map((e) => {
       const k = gkey(e.teamId, e.golfer);

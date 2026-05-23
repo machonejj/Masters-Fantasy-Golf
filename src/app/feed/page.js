@@ -5,6 +5,7 @@ import { Loading, PageHeader } from '@/app/page';
 import { scoreText, scoreColor } from '@/lib/scoring';
 import { teamColor } from '@/lib/teamColors';
 import ProbChart from '@/components/ProbChart';
+import PlayerScorecard from '@/components/PlayerScorecard';
 
 const FILTERS = [
   { key: 'all', label: 'All' },
@@ -45,7 +46,11 @@ export default function LiveFeedPage() {
   const [status, setStatus] = useState('loading');
   const [filter, setFilter] = useState('all');
   const [newKeys, setNewKeys] = useState(() => new Set());
+  const [selected, setSelected] = useState(null); // golfer to show the scorecard for
   const seenRef = useRef(null);
+
+  const openCard = (e) =>
+    setSelected({ name: e.golfer, owner: e.team, teamSeed: e.seed, athleteId: e.athleteId ?? null });
 
   useEffect(() => {
     let alive = true;
@@ -138,15 +143,17 @@ export default function LiveFeedPage() {
               <Fragment key={evKey(e)}>
                 {showRound && <RoundDivider round={e.round} />}
                 {hl ? (
-                  <HighlightRow e={e} hl={hl} team={team} mine={mine} isNew={isNew} />
+                  <HighlightRow e={e} hl={hl} team={team} mine={mine} isNew={isNew} onOpen={openCard} />
                 ) : (
-                  <ScoreRow e={e} team={team} mine={mine} isNew={isNew} />
+                  <ScoreRow e={e} team={team} mine={mine} isNew={isNew} onOpen={openCard} />
                 )}
               </Fragment>
             );
           })}
         </div>
       )}
+
+      {selected && <PlayerScorecard player={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }
@@ -186,7 +193,7 @@ function TeamTag({ team, total, hex, light = false }) {
 }
 
 // Card-style row for an ordinary score change (birdie / bogey).
-function ScoreRow({ e, team, mine, isNew }) {
+function ScoreRow({ e, team, mine, isNew, onOpen }) {
   const cls = classify(e.toPar);
   const c = teamColor(team?.seed);
   const good = cls.tone === 'good';
@@ -195,7 +202,8 @@ function ScoreRow({ e, team, mine, isNew }) {
 
   return (
     <div
-      className={`rounded-xl border px-3 py-2.5 ${isNew ? 'feed-new' : ''} ${
+      onClick={() => onOpen?.(e)}
+      className={`rounded-xl border px-3 py-2.5 cursor-pointer transition hover:shadow-sm active:scale-[0.99] ${isNew ? 'feed-new' : ''} ${
         good ? 'border-emerald-100 bg-emerald-50/50' : 'border-rose-100 bg-rose-50/50'
       } ${mine ? 'ring-1 ring-masters-gold/50' : ''}`}
     >
@@ -235,13 +243,14 @@ function ScoreRow({ e, team, mine, isNew }) {
 }
 
 // Big gradient banner for highlight moments (eagles, lead changes, meltdowns…).
-function HighlightRow({ e, hl, team, mine, isNew }) {
+function HighlightRow({ e, hl, team, mine, isNew, onOpen }) {
   const cls = classify(e.toPar);
   const good = hl.tone === 'good';
   const didMove = moved(e);
   return (
     <div
-      className={`relative overflow-hidden rounded-xl px-3.5 py-3 text-white shadow-masters ${
+      onClick={() => onOpen?.(e)}
+      className={`relative overflow-hidden rounded-xl px-3.5 py-3 text-white shadow-masters cursor-pointer transition hover:brightness-105 active:scale-[0.99] ${
         isNew ? 'feed-new' : ''
       } ${
         good

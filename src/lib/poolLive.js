@@ -77,7 +77,14 @@ export async function buildPoolLive(userId) {
         }
       }
     }
-    return { name: g.name, status: g.status, cum, holesPlayed: cum.length - 1, holes };
+    return {
+      name: g.name,
+      status: g.status,
+      athleteId: athleteByName.get(g.name.toLowerCase()) ?? null,
+      cum,
+      holesPlayed: cum.length - 1,
+      holes,
+    };
   }
 
   const teams = (participants || []).map((p) => ({

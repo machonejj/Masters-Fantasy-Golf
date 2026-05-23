@@ -121,6 +121,7 @@ export default function LeaderboardPage() {
                       <>
                         <div className="flex items-center gap-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-gray-400">
                           <span className="flex-1" />
+                          <span className="w-11 text-center">Thru</span>
                           <div className="flex gap-1">
                             {['R1', 'R2', 'R3', 'R4'].map((r) => (
                               <span key={r} className="w-6 text-center">
@@ -164,6 +165,7 @@ export default function LeaderboardPage() {
                                   {g.status === 'cut' && ' (MC)'}
                                   {g.status === 'wd' && ' (WD)'}
                                 </span>
+                                <ThruCell g={g} />
                                 <RoundBoxes g={g} />
                                 <span className={`w-9 text-right font-semibold ${scoreColor(score)}`}>
                                   {scoreText(score)}
@@ -201,6 +203,39 @@ export function PageHeader({ title, subtitle, action }) {
       </div>
       {action}
     </div>
+  );
+}
+
+// The hole a golfer is currently through — like The Field's Thru column: a hole
+// number while mid-round (amber), "F" once the round is done, or their tee time
+// before they've started. Cut/withdrawn golfers show nothing.
+function ThruCell({ g }) {
+  if (g.status === 'cut' || g.status === 'wd') {
+    return <span className="w-11 shrink-0 text-center text-[10px] text-gray-300">–</span>;
+  }
+  const thru = g.thru;
+  const numeric = /^\d+$/.test(String(thru));
+  return (
+    <span
+      className={`w-11 shrink-0 text-center tabular-nums ${
+        numeric
+          ? 'text-[11px] font-bold text-amber-600'
+          : thru === 'F'
+            ? 'text-[11px] font-semibold text-gray-400'
+            : 'text-[9px] leading-tight text-gray-400'
+      }`}
+      title={
+        numeric
+          ? `Thru ${thru} holes`
+          : thru === 'F'
+            ? 'Round complete'
+            : thru
+              ? `Tee time ${thru}`
+              : ''
+      }
+    >
+      {thru || '–'}
+    </span>
   );
 }
 

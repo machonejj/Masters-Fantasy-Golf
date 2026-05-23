@@ -143,11 +143,16 @@ export default function FieldPage() {
 
   if (loading) return <Loading />;
 
-  // Projected cut line (from ESPN). The divider is shown only on the full,
-  // total-sorted board, where row order reflects the actual standings.
+  // The cut happens once, after R2. While R1–R2 are underway it's a projection
+  // (from ESPN). Once it's been made — any golfer is cut, or R3 scoring has begun
+  // — it's final and already baked into the board via cut status (MC + red), so
+  // we stop showing the "projected cut" line/divider from R3 on.
   const cut = live.cut;
-  const showCutDivider =
-    cut?.score != null && filter === 'all' && sort.key === 'total' && sort.dir === 'asc';
+  const cutMade = merged.some((r) => r.status === 'cut' || r.rounds?.[2] != null);
+  const showCut = cut?.score != null && !cutMade;
+  // The divider is shown only on the full, total-sorted board, where row order
+  // reflects the actual standings.
+  const showCutDivider = showCut && filter === 'all' && sort.key === 'total' && sort.dir === 'asc';
   let cutIdx = -1;
   if (showCutDivider) {
     rows.forEach((r, i) => {
@@ -189,7 +194,7 @@ export default function FieldPage() {
             {f}
           </button>
         ))}
-        {cut?.score != null && (
+        {showCut && (
           <span
             className="chip bg-masters-gold-light text-masters-green"
             title={`Projected cut${cut.count ? ` — top ${cut.count} & ties` : ''} make the weekend`}
