@@ -1,26 +1,22 @@
-// Stable, subtly-distinct team colors so each team is easy to follow across The
-// Field, Standings, and the Draft Room. Seed with the team's draft_position —
-// the same team always gets the same color everywhere.
+// Stable, distinct team colors so each team is easy to follow across The Field,
+// Standings, and the Draft Room. Seed with the team's draft_position — the same
+// team always gets the same color everywhere.
 //
-// Muted, earthy Augusta-ish palette (pine, fairway, sand, gold, azalea, pond)
-// so it vibes with the Masters theme instead of looking like neon highlighters.
-//
-// IMPORTANT: Tailwind's JIT scans source text for COMPLETE class strings — it
-// can't see classes built by concatenation. So every class is written out in
-// full literals below (text / bg-tint / dot / all-border / left-border).
+// Masters palette: shades of green and gold/yellow only, ordered to alternate
+// green ↔ gold so adjacent teams contrast. All are dark enough to read as the
+// owner labels on white. Class names are full literals so Tailwind's JIT keeps
+// them (it can't see classes built by concatenation).
 const PALETTE = [
-  { hex: '#3a6b47', text: 'text-[#3a6b47]', bg: 'bg-[#3a6b47]/15', dot: 'bg-[#3a6b47]', border: 'border-[#3a6b47]', borderL: 'border-l-[#3a6b47]' }, // pine green
-  { hex: '#a8842c', text: 'text-[#a8842c]', bg: 'bg-[#a8842c]/15', dot: 'bg-[#a8842c]', border: 'border-[#a8842c]', borderL: 'border-l-[#a8842c]' }, // augusta gold
-  { hex: '#b05f3a', text: 'text-[#b05f3a]', bg: 'bg-[#b05f3a]/15', dot: 'bg-[#b05f3a]', border: 'border-[#b05f3a]', borderL: 'border-l-[#b05f3a]' }, // clay
-  { hex: '#b14a5b', text: 'text-[#b14a5b]', bg: 'bg-[#b14a5b]/15', dot: 'bg-[#b14a5b]', border: 'border-[#b14a5b]', borderL: 'border-l-[#b14a5b]' }, // azalea
-  { hex: '#7a4f8a', text: 'text-[#7a4f8a]', bg: 'bg-[#7a4f8a]/15', dot: 'bg-[#7a4f8a]', border: 'border-[#7a4f8a]', borderL: 'border-l-[#7a4f8a]' }, // plum
-  { hex: '#44688f', text: 'text-[#44688f]', bg: 'bg-[#44688f]/15', dot: 'bg-[#44688f]', border: 'border-[#44688f]', borderL: 'border-l-[#44688f]' }, // pond blue
-  { hex: '#2f7d70', text: 'text-[#2f7d70]', bg: 'bg-[#2f7d70]/15', dot: 'bg-[#2f7d70]', border: 'border-[#2f7d70]', borderL: 'border-l-[#2f7d70]' }, // teal
-  { hex: '#6f7a30', text: 'text-[#6f7a30]', bg: 'bg-[#6f7a30]/15', dot: 'bg-[#6f7a30]', border: 'border-[#6f7a30]', borderL: 'border-l-[#6f7a30]' }, // olive
-  { hex: '#8a5a3c', text: 'text-[#8a5a3c]', bg: 'bg-[#8a5a3c]/15', dot: 'bg-[#8a5a3c]', border: 'border-[#8a5a3c]', borderL: 'border-l-[#8a5a3c]' }, // bark
-  { hex: '#993f63', text: 'text-[#993f63]', bg: 'bg-[#993f63]/15', dot: 'bg-[#993f63]', border: 'border-[#993f63]', borderL: 'border-l-[#993f63]' }, // berry
-  { hex: '#566773', text: 'text-[#566773]', bg: 'bg-[#566773]/15', dot: 'bg-[#566773]', border: 'border-[#566773]', borderL: 'border-l-[#566773]' }, // slate
-  { hex: '#6f8f4f', text: 'text-[#6f8f4f]', bg: 'bg-[#6f8f4f]/15', dot: 'bg-[#6f8f4f]', border: 'border-[#6f8f4f]', borderL: 'border-l-[#6f8f4f]' }, // sage
+  { hex: '#2f6b40', text: 'text-[#2f6b40]', bg: 'bg-[#2f6b40]/15', dot: 'bg-[#2f6b40]', border: 'border-[#2f6b40]', borderL: 'border-l-[#2f6b40]' }, // pine green
+  { hex: '#b1851f', text: 'text-[#b1851f]', bg: 'bg-[#b1851f]/15', dot: 'bg-[#b1851f]', border: 'border-[#b1851f]', borderL: 'border-l-[#b1851f]' }, // gold
+  { hex: '#4a9a3f', text: 'text-[#4a9a3f]', bg: 'bg-[#4a9a3f]/15', dot: 'bg-[#4a9a3f]', border: 'border-[#4a9a3f]', borderL: 'border-l-[#4a9a3f]' }, // grass green
+  { hex: '#8a6620', text: 'text-[#8a6620]', bg: 'bg-[#8a6620]/15', dot: 'bg-[#8a6620]', border: 'border-[#8a6620]', borderL: 'border-l-[#8a6620]' }, // bronze
+  { hex: '#5e7d2a', text: 'text-[#5e7d2a]', bg: 'bg-[#5e7d2a]/15', dot: 'bg-[#5e7d2a]', border: 'border-[#5e7d2a]', borderL: 'border-l-[#5e7d2a]' }, // moss
+  { hex: '#b8901a', text: 'text-[#b8901a]', bg: 'bg-[#b8901a]/15', dot: 'bg-[#b8901a]', border: 'border-[#b8901a]', borderL: 'border-l-[#b8901a]' }, // goldenrod
+  { hex: '#1f5e38', text: 'text-[#1f5e38]', bg: 'bg-[#1f5e38]/15', dot: 'bg-[#1f5e38]', border: 'border-[#1f5e38]', borderL: 'border-l-[#1f5e38]' }, // forest
+  { hex: '#6f7a14', text: 'text-[#6f7a14]', bg: 'bg-[#6f7a14]/15', dot: 'bg-[#6f7a14]', border: 'border-[#6f7a14]', borderL: 'border-l-[#6f7a14]' }, // olive
+  { hex: '#7a9b4f', text: 'text-[#7a9b4f]', bg: 'bg-[#7a9b4f]/15', dot: 'bg-[#7a9b4f]', border: 'border-[#7a9b4f]', borderL: 'border-l-[#7a9b4f]' }, // sage
+  { hex: '#9c7a10', text: 'text-[#9c7a10]', bg: 'bg-[#9c7a10]/15', dot: 'bg-[#9c7a10]', border: 'border-[#9c7a10]', borderL: 'border-l-[#9c7a10]' }, // mustard
 ];
 
 const NEUTRAL = {
