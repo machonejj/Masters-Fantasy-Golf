@@ -91,7 +91,8 @@ export default function LoginPage() {
 
       <div className="relative z-[2] w-full max-w-sm bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6 shadow-2xl">
         <div className="text-center mb-6">
-          <span className="text-4xl block mb-1">⛳</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/augusta-mark.png" alt="" className="h-16 w-auto mx-auto mb-2" />
           <h1 className="font-masters text-2xl font-bold tracking-wide text-white">
             Augusta Pickem
           </h1>

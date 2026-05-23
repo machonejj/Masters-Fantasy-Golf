@@ -34,8 +34,9 @@ export default function NavBar({ profile }) {
       <div className="max-w-5xl mx-auto">
         {/* Brand + account */}
         <div className="flex items-center justify-between px-4 h-12">
-          <Link href="/" className="flex items-center gap-1.5 text-white whitespace-nowrap">
-            <span className="text-lg leading-none">⛳</span>
+          <Link href="/" className="flex items-center gap-2 text-white whitespace-nowrap">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/augusta-mark.png" alt="Augusta Pickem" className="h-7 w-auto" />
             <span className="font-masters text-base font-bold tracking-wide leading-none">
               Augusta Pickem
             </span>
