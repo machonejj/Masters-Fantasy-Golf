@@ -40,7 +40,7 @@ export default function LoginPage() {
         try {
           localStorage.setItem(REMEMBER_KEY, theCode);
         } catch {}
-        router.push(data.role === 'admin' ? '/admin' : '/team');
+        router.push(data.role === 'admin' ? '/admin' : '/');
         router.refresh();
         return true;
       } catch (err) {

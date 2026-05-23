@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 const TABS = [
   { href: '/', label: 'Standings' },
   { href: '/golfers', label: 'The Field' },
-  { href: '/team', label: 'My Team' },
+  { href: '/feed', label: 'Live Feed' },
   { href: '/draft', label: 'Draft Room' },
 ];
 

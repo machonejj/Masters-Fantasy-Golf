@@ -5,16 +5,16 @@ import { teamColor } from '@/lib/teamColors';
 // Kalshi-style win-probability race: one line per team (team-colored), with a
 // 1/N even-odds baseline. teams: [{ id, name, seed, series:[{hole,pct}] }].
 // highlightId (optional) draws that team's line bolder and fades the rest.
-export default function ProbChart({ teams, baseline = 0, highlightId = null }) {
+export default function ProbChart({ teams, baseline = 0, highlightId = null, compact = false }) {
   const valid = (teams || []).filter((t) => t.series && t.series.length >= 2);
   if (valid.length === 0) return null;
 
   const W = 320;
-  const H = 140;
+  const H = compact ? 74 : 140;
   const padL = 6;
   const padR = 6;
-  const padT = 10;
-  const padB = 18;
+  const padT = compact ? 6 : 10;
+  const padB = compact ? 13 : 18;
   // Fixed 72-hole (4-round) width so R1–R4 always show; the line just stops
   // where the data does, leaving later rounds as empty space.
   const DOMAIN = 72;
@@ -85,28 +85,54 @@ export default function ProbChart({ teams, baseline = 0, highlightId = null }) {
           })}
 
         {rounds.map((d) => (
-          <text key={d.r} x={x((d.r - 1) * 18 + 9)} y={H - 5} textAnchor="middle" fontSize="8" fill="#9ca3af">
+          <text
+            key={d.r}
+            x={x((d.r - 1) * 18 + 9)}
+            y={H - (compact ? 3 : 5)}
+            textAnchor="middle"
+            fontSize={compact ? 7 : 8}
+            fill="#9ca3af"
+          >
             {d.label}
           </text>
         ))}
       </svg>
 
-      <div className="mt-3 space-y-1">
-        {legend.map((t) => {
-          const isHi = highlightId && t.id === highlightId;
-          return (
-            <div key={t.id} className={`flex items-center gap-2 text-sm ${isHi ? 'font-bold' : ''}`}>
-              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
-              <span className="flex-1 truncate" style={{ color: t.color }}>
+      {compact ? (
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+          {legend.map((t) => {
+            const isHi = highlightId && t.id === highlightId;
+            return (
+              <span
+                key={t.id}
+                className={`inline-flex items-center gap-1 ${isHi ? 'font-bold' : ''}`}
+                style={{ color: t.color }}
+              >
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: t.color }} />
                 {t.name}
+                <span className="font-semibold">{Math.round(t.cur * 100)}%</span>
               </span>
-              <span className="font-semibold tabular-nums" style={{ color: t.color }}>
-                {Math.round(t.cur * 100)}%
-              </span>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="mt-3 space-y-1">
+          {legend.map((t) => {
+            const isHi = highlightId && t.id === highlightId;
+            return (
+              <div key={t.id} className={`flex items-center gap-2 text-sm ${isHi ? 'font-bold' : ''}`}>
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
+                <span className="flex-1 truncate" style={{ color: t.color }}>
+                  {t.name}
+                </span>
+                <span className="font-semibold tabular-nums" style={{ color: t.color }}>
+                  {Math.round(t.cur * 100)}%
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

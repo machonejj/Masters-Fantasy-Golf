@@ -1,36 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { usePoolData } from '@/lib/usePoolData';
 import { teamData, scoreText, scoreColor, golferTotal } from '@/lib/scoring';
 import { teamColor } from '@/lib/teamColors';
 import { useLiveScores, mergeLive } from '@/lib/useLiveScores';
 import PlayerScorecard from '@/components/PlayerScorecard';
-import ProbChart from '@/components/ProbChart';
 
 export default function LeaderboardPage() {
-  const { loading, settings, participants, golfers, picks } = usePoolData();
+  const { loading, user, settings, participants, golfers, picks } = usePoolData();
   const [expanded, setExpanded] = useState(null);
   const [selected, setSelected] = useState(null); // golfer to show scorecard for
-  const [odds, setOdds] = useState({ teams: [], baseline: 0 });
-
-  // All-teams win-probability lines (server-side from ESPN scorecards).
-  useEffect(() => {
-    let alive = true;
-    const load = () =>
-      fetch('/api/team/odds')
-        .then((r) => r.json())
-        .then((d) => {
-          if (alive) setOdds({ teams: d.teams || [], baseline: d.baseline || 0 });
-        })
-        .catch(() => {});
-    load();
-    const t = setInterval(load, 120000);
-    return () => {
-      alive = false;
-      clearInterval(t);
-    };
-  }, []);
 
   // Live ESPN scores, refreshed on an interval, so standings stay current.
   const { live, updatedAt } = useLiveScores();
@@ -46,6 +26,8 @@ export default function LeaderboardPage() {
         return a.teamScore - b.teamScore;
       });
   }, [participants, picks, liveGolfers, settings]);
+
+  const myId = participants.find((p) => p.user_id === user?.id)?.id ?? null;
 
   if (loading) return <Loading />;
 
@@ -73,12 +55,6 @@ export default function LeaderboardPage() {
         }
       />
 
-      {odds.teams.length > 0 && (
-        <div className="card mb-5">
-          <ProbChart teams={odds.teams} baseline={odds.baseline} />
-        </div>
-      )}
-
       {standings.length === 0 ? (
         <div className="card text-center text-gray-500">
           No teams yet. The admin needs to add participants.
@@ -88,10 +64,13 @@ export default function LeaderboardPage() {
           {standings.map((row, i) => {
             const isOpen = expanded === row.p.id;
             const color = teamColor(row.p.draft_position);
+            const isMe = row.p.id === myId;
             return (
               <div
                 key={row.p.id}
-                className={`border-b border-masters-green-light last:border-0 border-l-4 ${color.borderL}`}
+                className={`border-b border-masters-green-light last:border-0 border-l-4 ${color.borderL} ${
+                  isMe ? 'bg-masters-gold-pale' : ''
+                }`}
               >
                 <button
                   onClick={() => setExpanded(isOpen ? null : row.p.id)}
@@ -110,6 +89,9 @@ export default function LeaderboardPage() {
                       <span className={`font-semibold truncate ${color.text}`}>
                         {row.p.display_name}
                       </span>
+                      {isMe && (
+                        <span className="chip bg-masters-gold text-masters-green shrink-0">You</span>
+                      )}
                     </div>
                     <div className="text-xs text-gray-400">
                       {row.golfers.length} golfer{row.golfers.length === 1 ? '' : 's'} · best{' '}
