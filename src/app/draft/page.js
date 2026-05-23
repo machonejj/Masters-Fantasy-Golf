@@ -214,6 +214,7 @@ export default function DraftPage() {
         </div>
       )}
 
+      {!complete && (
       <div className="grid md:grid-cols-2 gap-5">
         {/* ── Available golfers ───────────────────────────────────── */}
         <div className="card">
@@ -327,6 +328,7 @@ export default function DraftPage() {
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }
