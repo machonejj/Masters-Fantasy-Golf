@@ -12,10 +12,10 @@ function randn() {
 }
 
 const TOTAL_HOLES = 72;
-const SD_ROUND = 3.0; // a round's scoring spread (to-par strokes)
 
 // teams: [{ id, golfers: [{ cum: [0, …], holesPlayed, status }] }]
-function winProbAtHole(teams, T, { counting, cutPenalty, sims }) {
+// sd = a round's scoring spread (to-par strokes); higher = looser/less certain odds.
+function winProbAtHole(teams, T, { counting, cutPenalty, sims, sd }) {
   const ids = teams.map((t) => t.id);
   const wins = Object.fromEntries(ids.map((id) => [id, 0]));
 
@@ -38,7 +38,7 @@ function winProbAtHole(teams, T, { counting, cutPenalty, sims }) {
     for (const t of prep) {
       const totals = t.golfers.map((g) => {
         if (g.cut) return cutPenalty;
-        const proj = g.known + g.meanPerRound * g.rr + SD_ROUND * Math.sqrt(g.rr) * randn();
+        const proj = g.known + g.meanPerRound * g.rr + sd * Math.sqrt(g.rr) * randn();
         return Math.round(proj);
       });
       totals.sort((a, b) => a - b);
@@ -61,7 +61,10 @@ function winProbAtHole(teams, T, { counting, cutPenalty, sims }) {
 
 // Every team's win-probability line in one pass: 1/N at the start, then a point
 // per hole played. Returns { [teamId]: [{ hole, pct }] }.
-export function allTeamWinSeries(teams, { counting = 3, cutPenalty = 16, sims = 800 } = {}) {
+export function allTeamWinSeries(
+  teams,
+  { counting = 3, cutPenalty = 16, sims = 800, sd = 4.3 } = {}
+) {
   const n = teams.length;
   if (n === 0) return {};
 
@@ -71,7 +74,7 @@ export function allTeamWinSeries(teams, { counting = 3, cutPenalty = 16, sims = 
 
   const out = Object.fromEntries(teams.map((t) => [t.id, [{ hole: 0, pct: 1 / n }]]));
   for (let T = 1; T <= maxT; T++) {
-    const p = winProbAtHole(teams, T, { counting, cutPenalty, sims });
+    const p = winProbAtHole(teams, T, { counting, cutPenalty, sims, sd });
     for (const t of teams) out[t.id].push({ hole: T, pct: p[t.id] ?? 0 });
   }
   return out;
