@@ -1,6 +1,7 @@
 'use client';
 
 import { teamColor } from '@/lib/teamColors';
+import { scoreText, scoreColor } from '@/lib/scoring';
 
 // Clip a team's win-prob series to the field's current progress `now` (in
 // tournament holes, 0–72). Without this, every line runs to the single furthest
@@ -190,14 +191,17 @@ export default function ProbChart({ teams, baseline = 0, highlightId = null, com
           {legend.map((t) => {
             const isHi = highlightId && t.id === highlightId;
             return (
-              <span
-                key={t.id}
-                className={`inline-flex items-center gap-1 ${isHi ? 'font-bold' : ''}`}
-                style={{ color: t.color }}
-              >
-                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: t.color }} />
-                {t.name}
-                <span className="font-semibold">{Math.round(t.cur * 100)}%</span>
+              <span key={t.id} className={`inline-flex flex-col items-end leading-tight ${isHi ? 'font-bold' : ''}`}>
+                <span className="inline-flex items-center gap-1" style={{ color: t.color }}>
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: t.color }} />
+                  {t.name}
+                  <span className="font-semibold">{Math.round(t.cur * 100)}%</span>
+                </span>
+                {t.total !== null && t.total !== undefined && (
+                  <span className={`text-[10px] font-semibold tabular-nums ${scoreColor(t.total)}`}>
+                    {scoreText(t.total)}
+                  </span>
+                )}
               </span>
             );
           })}
@@ -212,9 +216,16 @@ export default function ProbChart({ teams, baseline = 0, highlightId = null, com
                 <span className="flex-1 truncate" style={{ color: t.color }}>
                   {t.name}
                 </span>
-                <span className="font-semibold tabular-nums" style={{ color: t.color }}>
-                  {Math.round(t.cur * 100)}%
-                </span>
+                <div className="text-right leading-tight">
+                  <div className="font-semibold tabular-nums" style={{ color: t.color }}>
+                    {Math.round(t.cur * 100)}%
+                  </div>
+                  {t.total !== null && t.total !== undefined && (
+                    <div className={`text-[10px] font-semibold tabular-nums ${scoreColor(t.total)}`}>
+                      {scoreText(t.total)}
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })}

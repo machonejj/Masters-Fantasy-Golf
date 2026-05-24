@@ -1,38 +1,47 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-// Polls the live ESPN feed and returns a name→competitor map (null until loaded)
-// plus the last update time. Lets pages show live standings without anyone
-// having to hit "Pull live scores" — the data refreshes itself on an interval.
+// Polls the live ESPN feed and returns a name→competitor map (null until loaded),
+// the last update time, a status, and a manual refresh(). Pages get live data on
+// an interval and can also offer a "↻ Live" button via the shared LiveStatus.
 export function useLiveScores(pollMs = 60000) {
   const [live, setLive] = useState(null);
   const [updatedAt, setUpdatedAt] = useState(null);
+  const [status, setStatus] = useState('loading'); // loading | ok | error
+  const aliveRef = useRef(true);
+
+  const refresh = useCallback(async () => {
+    setStatus('loading');
+    try {
+      const res = await fetch('/api/golfers/live');
+      const data = await res.json();
+      if (!aliveRef.current) return;
+      if (!res.ok) {
+        setStatus('error');
+        return;
+      }
+      const map = {};
+      for (const c of data.competitors || []) map[c.name.toLowerCase()] = c;
+      setLive(map);
+      setUpdatedAt(data.updatedAt || new Date().toISOString());
+      setStatus('ok');
+    } catch {
+      if (aliveRef.current) setStatus('error'); // keep the last good data on a blip
+    }
+  }, []);
 
   useEffect(() => {
-    let alive = true;
-    const load = async () => {
-      try {
-        const res = await fetch('/api/golfers/live');
-        const data = await res.json();
-        if (!res.ok || !alive) return;
-        const map = {};
-        for (const c of data.competitors || []) map[c.name.toLowerCase()] = c;
-        setLive(map);
-        setUpdatedAt(data.updatedAt || new Date().toISOString());
-      } catch {
-        /* keep the last good data on a blip */
-      }
-    };
-    load();
-    const t = setInterval(load, pollMs);
+    aliveRef.current = true;
+    refresh();
+    const t = setInterval(refresh, pollMs);
     return () => {
-      alive = false;
+      aliveRef.current = false;
       clearInterval(t);
     };
-  }, [pollMs]);
+  }, [pollMs, refresh]);
 
-  return { live, updatedAt };
+  return { live, updatedAt, status, refresh };
 }
 
 // Overlays a golfer's stored round scores with the live feed (authoritative when

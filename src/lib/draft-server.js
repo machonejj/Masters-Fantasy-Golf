@@ -11,8 +11,10 @@ export async function advanceDraft(db, state, participants) {
   if (done) {
     patch.status = 'complete';
     patch.pick_deadline = null;
-  } else {
+  } else if (state.pick_timer_seconds > 0) {
     patch.pick_deadline = new Date(Date.now() + state.pick_timer_seconds * 1000).toISOString();
+  } else {
+    patch.pick_deadline = null; // no timer → unlimited time for the next pick
   }
 
   await db.from('draft_state').update(patch).eq('id', 1);

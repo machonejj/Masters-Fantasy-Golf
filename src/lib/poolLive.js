@@ -28,6 +28,9 @@ export async function buildPoolLive(userId) {
   const athleteByName = new Map(
     (board?.competitors || []).map((c) => [c.name.toLowerCase(), c.athleteId])
   );
+  const compByName = new Map(
+    (board?.competitors || []).map((c) => [c.name.toLowerCase(), c])
+  );
   const golferById = new Map((golfers || []).map((g) => [g.id, g]));
 
   // Pull each drafted golfer's scorecard once, in parallel.
@@ -45,17 +48,17 @@ export async function buildPoolLive(userId) {
     })
   );
 
-  // Per-golfer cumulative to-par (for odds) + flattened played holes (for feed).
   function golferData(g) {
     const card = cardByGolfer[g.id];
-    const cum = [0];
+    const comp = compByName.get(g.name.toLowerCase());
+
+    // Hole-by-hole list for the live feed — from the detailed scorecard.
     const holes = [];
-    let acc = 0;
     if (card?.rounds?.length) {
+      let acc = 0;
       for (const rd of [...card.rounds].sort((a, b) => a.round - b.round)) {
         for (const h of rd.holes) {
           acc += h.toPar;
-          cum.push(acc);
           holes.push({
             round: rd.round,
             hole: h.hole,
@@ -67,19 +70,41 @@ export async function buildPoolLive(userId) {
           });
         }
       }
-    } else {
-      for (const r of [g.r1, g.r2, g.r3, g.r4]) {
-        if (r === null || r === undefined || r === '') break;
-        const per = Number(r) / 18;
-        for (let h = 0; h < 18; h++) {
-          acc += per;
-          cum.push(acc);
-        }
+    }
+
+    // Cumulative to-par + holes played for the win-prob chart, built from the
+    // LIVE leaderboard (per-round to-par + current-round `thru`). The leaderboard
+    // tracks the field in real time, whereas the detailed scorecard lags and can
+    // stall the chart between days/rounds. Each round's to-par is spread evenly
+    // across its holes (an approximation that's fine for the projection); falls
+    // back to the stored rounds when the live feed is unavailable.
+    const rounds =
+      comp?.rounds && comp.rounds.length
+        ? comp.rounds.map((rt, i) => {
+            const isCurrent = i === comp.rounds.length - 1;
+            const holesIn = isCurrent && /^\d+$/.test(String(comp.thru)) ? Number(comp.thru) : 18;
+            return { rt, holesIn };
+          })
+        : [g.r1, g.r2, g.r3, g.r4]
+            .filter((r) => r !== null && r !== undefined && r !== '')
+            .map((r) => ({ rt: Number(r), holesIn: 18 }));
+
+    const cum = [0];
+    let acc = 0;
+    for (const { rt, holesIn } of rounds) {
+      if (rt === null || rt === undefined || holesIn <= 0) break;
+      const per = rt / holesIn;
+      for (let h = 0; h < holesIn; h++) {
+        acc += per;
+        cum.push(acc);
       }
     }
+
     return {
       name: g.name,
-      status: g.status,
+      // Live leaderboard status (cut/wd/active) — the stored DB status lags and
+      // would otherwise count cut golfers as active in the standings/odds.
+      status: comp?.status ?? g.status,
       athleteId: athleteByName.get(g.name.toLowerCase()) ?? null,
       cum,
       holesPlayed: cum.length - 1,

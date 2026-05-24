@@ -3,13 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePoolData } from '@/lib/usePoolData';
 import { Loading, PageHeader } from '@/app/page';
-import {
-  snakePicker,
-  totalPicks,
-  isDraftComplete,
-  upcomingPicks,
-} from '@/lib/draft';
+import { snakePicker, totalPicks, isDraftComplete } from '@/lib/draft';
 import { teamColor } from '@/lib/teamColors';
+import { useLiveScores } from '@/lib/useLiveScores';
 
 function fmtClock(secs) {
   if (secs == null || secs < 0) secs = 0;
@@ -28,7 +24,21 @@ export default function DraftPage() {
   const [search, setSearch] = useState('');
   const [picking, setPicking] = useState(false);
   const [error, setError] = useState('');
+  const [pickReveal, setPickReveal] = useState(null); // { name, team, seed, mine, athleteId }
   const tickGuard = useRef(0);
+  const seenPickRef = useRef(null); // highest pick_number seen (null until first load)
+  const pickSound = useRef(null); // sound effect played on each pick
+
+  // Live ESPN field gives each golfer's athleteId, used for the pick headshot.
+  const { live } = useLiveScores();
+
+  // Load the pick sound once (drop the file at public/pick.mp3). Missing/blocked
+  // audio fails silently, so the draft still works without it.
+  useEffect(() => {
+    pickSound.current = new Audio('/pick.mp3');
+    pickSound.current.preload = 'auto';
+    pickSound.current.volume = 0.35; // keep the chime gentle
+  }, []);
 
   // 1-second clock for the countdown.
   useEffect(() => {
@@ -39,6 +49,7 @@ export default function DraftPage() {
   const draftState = settings; // draft_state row holds status + settings
   const status = draftState?.status;
   const gpt = draftState?.golfers_per_team ?? 6;
+  const hasTimer = (draftState?.pick_timer_seconds ?? 0) > 0; // 0 = no time limit
 
   const myParticipant = useMemo(
     () => participants.find((p) => p.user_id === user?.id) || null,
@@ -63,24 +74,68 @@ export default function DraftPage() {
   }, [status, draftState, now]);
 
   // When the clock hits zero, nudge the server to auto-pick (idempotent, throttled).
+  // No-op when there's no timer.
   useEffect(() => {
-    if (status !== 'active' || complete) return;
+    if (status !== 'active' || complete || !hasTimer) return;
     if (remaining !== null && remaining <= 0 && Date.now() - tickGuard.current > 4000) {
       tickGuard.current = Date.now();
       fetch('/api/draft/tick', { method: 'POST' }).then(() => refresh());
     }
-  }, [remaining, status, complete, refresh]);
+  }, [remaining, status, complete, hasTimer, refresh]);
 
   // Keep the auto-pick alive while the page is open even with no interaction.
+  // Only needed when a timer is set (otherwise there's nothing to auto-fire).
   useEffect(() => {
-    if (status !== 'active') return;
+    if (status !== 'active' || !hasTimer) return;
     const t = setInterval(() => {
       fetch('/api/draft/tick', { method: 'POST' }).then((r) => {
         if (r.ok) r.json().then((d) => d?.advanced && refresh());
       });
     }, 5000);
     return () => clearInterval(t);
-  }, [status, refresh]);
+  }, [status, hasTimer, refresh]);
+
+  // Detect a new pick (mine, someone else's, or an auto-pick) and fire the
+  // reveal animation. Skips the very first load so existing picks don't replay.
+  useEffect(() => {
+    const maxPick = picks.length ? picks.reduce((m, p) => Math.max(m, p.pick_number), -1) : -1;
+    if (seenPickRef.current === null) {
+      seenPickRef.current = maxPick; // first load — don't animate the backlog
+      return;
+    }
+    if (maxPick > seenPickRef.current) {
+      const latest = picks.find((p) => p.pick_number === maxPick);
+      const g = golfers.find((x) => x.id === latest?.golfer_id);
+      const part = participants.find((x) => x.id === latest?.participant_id);
+      if (g) {
+        setPickReveal({
+          name: g.name,
+          team: part?.display_name,
+          seed: part?.draft_position,
+          mine: !!myParticipant && part?.id === myParticipant.id,
+          athleteId: live?.[g.name.toLowerCase()]?.athleteId ?? null,
+        });
+        const a = pickSound.current;
+        if (a) {
+          try {
+            a.currentTime = 0;
+            a.play().catch(() => {}); // ignore autoplay-policy blocks
+          } catch {
+            /* no-op */
+          }
+        }
+      }
+    }
+    // Always resync — also handles undo (maxPick drops) so a re-pick re-animates.
+    seenPickRef.current = maxPick;
+  }, [picks, golfers, participants, live, myParticipant]);
+
+  // Auto-dismiss the reveal.
+  useEffect(() => {
+    if (!pickReveal) return;
+    const t = setTimeout(() => setPickReveal(null), 2800);
+    return () => clearTimeout(t);
+  }, [pickReveal]);
 
   const takenIds = useMemo(() => new Set(picks.map((p) => p.golfer_id)), [picks]);
   const available = useMemo(
@@ -113,9 +168,6 @@ export default function DraftPage() {
   if (loading) return <Loading />;
 
   const total = totalPicks(participants, gpt);
-  const upcoming = draftState
-    ? upcomingPicks(draftState.current_pick, participants, gpt, 6)
-    : [];
 
   return (
     <div>
@@ -135,10 +187,13 @@ export default function DraftPage() {
         </div>
       )}
       {complete && (
-        <div className="card bg-masters-green text-white text-center">
-          <p className="font-serif text-lg">🏆 The draft is complete!</p>
-          <p className="text-white/70 text-sm">Head to Standings to follow the action.</p>
-        </div>
+        <>
+          <div className="card bg-masters-green text-white text-center mb-5">
+            <p className="font-serif text-lg">🏆 The draft is complete!</p>
+            <p className="text-white/70 text-sm">Head to Standings to follow the action.</p>
+          </div>
+          <DraftReview picks={picks} golfers={golfers} participants={participants} />
+        </>
       )}
 
       {status === 'active' && !complete && onClock && (
@@ -170,14 +225,22 @@ export default function DraftPage() {
             )}
           </div>
           <div className="text-right shrink-0">
-            <div
-              className={`font-serif text-3xl font-bold tabular-nums ${
-                remaining !== null && remaining <= 60 ? 'text-score-over' : 'text-masters-green'
-              }`}
-            >
-              {fmtClock(remaining)}
-            </div>
-            <div className="text-[11px] text-gray-400">auto-picks best available</div>
+            {hasTimer ? (
+              <>
+                <div
+                  className={`font-serif text-3xl font-bold tabular-nums ${
+                    remaining !== null && remaining <= 60 ? 'text-score-over' : 'text-masters-green'
+                  }`}
+                >
+                  {fmtClock(remaining)}
+                </div>
+                <div className="text-[11px] text-gray-400">auto-picks best available</div>
+              </>
+            ) : (
+              <div className="text-[11px] uppercase tracking-wide text-gray-400">
+                No time limit
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -186,38 +249,10 @@ export default function DraftPage() {
         <div className="bg-red-100 text-red-800 text-sm rounded-lg px-3 py-2 mb-4">{error}</div>
       )}
 
-      {/* ── Snake order on deck ───────────────────────────────────── */}
-      {status === 'active' && !complete && upcoming.length > 0 && (
-        <div className="card mb-5">
-          <div className="card-title">On Deck</div>
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {upcoming.map(({ pickIndex, participant }) => {
-              const c = teamColor(participant?.draft_position);
-              const current = pickIndex === draftState.current_pick;
-              return (
-                <div
-                  key={pickIndex}
-                  className={`shrink-0 px-3 py-2 rounded-lg text-center border ${
-                    current
-                      ? 'bg-masters-green text-white border-masters-green animate-turn'
-                      : `${c.bg} ${c.text} ${c.border}`
-                  }`}
-                >
-                  <div className="text-[10px] opacity-70">#{pickIndex + 1}</div>
-                  <div className="text-xs font-semibold whitespace-nowrap">
-                    {participant?.display_name}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {!complete && (
-      <div className="grid md:grid-cols-2 gap-5">
+      <div className="flex flex-col gap-5">
         {/* ── Available golfers ───────────────────────────────────── */}
-        <div className="card">
+        <div className="card order-2">
           <div className="card-title">Available Golfers ({available.length})</div>
           {(isMyTurn || profile?.is_admin) && status === 'active' && !complete ? (
             <p className="text-xs text-masters-green-mid mb-3">
@@ -268,9 +303,9 @@ export default function DraftPage() {
         </div>
 
         {/* ── Draft board / pick log ──────────────────────────────── */}
-        <div className="card">
+        <div className="card order-1">
           <div className="card-title">Draft Board</div>
-          <div className="max-h-[520px] overflow-y-auto -mx-1 px-1">
+          <div className="max-h-[520px] overflow-y-auto -mx-1 px-1 space-y-2.5">
             {participants.length === 0 && (
               <p className="text-sm text-gray-400">No participants yet.</p>
             )}
@@ -285,8 +320,12 @@ export default function DraftPage() {
               return (
                 <div
                   key={p.id}
-                  className={`mb-3 pl-2 border-l-4 ${c.borderL} ${
-                    isOnClock ? 'bg-masters-gold-pale rounded-r-lg py-1' : ''
+                  className={`rounded-xl bg-white border border-masters-green-light border-l-4 ${c.borderL} px-3 py-2.5 transition ${
+                    isOnClock && isMe
+                      ? 'bg-masters-gold-pale animate-turn'
+                      : isOnClock
+                        ? 'bg-masters-gold-pale ring-1 ring-masters-gold'
+                        : ''
                   }`}
                 >
                   <div className="flex items-center justify-between">
@@ -328,6 +367,125 @@ export default function DraftPage() {
           </div>
         </div>
       </div>
+      )}
+
+      {pickReveal && <PickReveal pick={pickReveal} onClose={() => setPickReveal(null)} />}
+    </div>
+  );
+}
+
+// Celebratory pick reveal: the golfer's headshot pops out of a dot to full size
+// with "You picked …" (or "<Team> picked …"). Tap anywhere to dismiss early.
+function PickReveal({ pick, onClose }) {
+  const [imgOk, setImgOk] = useState(true);
+  const c = teamColor(pick.seed);
+  const headshot = pick.athleteId
+    ? `https://a.espncdn.com/i/headshots/golf/players/full/${pick.athleteId}.png`
+    : null;
+  const initials = (pick.name || '')
+    .split(/\s+/)
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/45 backdrop-blur-sm px-6"
+    >
+      <div className="animate-pick flex flex-col items-center text-center">
+        <div
+          className="w-32 h-32 rounded-full overflow-hidden flex items-center justify-center bg-masters-green-light shadow-2xl"
+          style={{ boxShadow: `0 0 0 4px ${c.hex || '#1a4d2e'}, 0 10px 40px rgba(0,0,0,0.4)` }}
+        >
+          {headshot && imgOk ? (
+            <img
+              src={headshot}
+              alt={pick.name}
+              onError={() => setImgOk(false)}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <span className="font-serif text-4xl font-bold text-masters-green">{initials}</span>
+          )}
+        </div>
+        <div className="animate-pick-fade mt-5 text-white">
+          <div className="text-xs uppercase tracking-[0.2em] text-white/70">
+            {pick.mine ? 'You picked' : `${pick.team || 'Team'} picked`}
+          </div>
+          <div className="font-serif text-3xl font-bold mt-1.5 drop-shadow">{pick.name}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Post-draft recap: every pick in order, labelled round.pickInRound (e.g. "2.3"),
+// grouped by round, with the golfer and the team that took them.
+function DraftReview({ picks, golfers, participants }) {
+  const teams = participants.length || 1;
+  const gById = new Map(golfers.map((g) => [g.id, g]));
+  const pById = new Map(participants.map((p) => [p.id, p]));
+  const sorted = [...picks].sort((a, b) => a.pick_number - b.pick_number);
+
+  const rounds = [];
+  for (const pk of sorted) {
+    const round = Math.floor(pk.pick_number / teams) + 1;
+    let bucket = rounds.find((b) => b.round === round);
+    if (!bucket) {
+      bucket = { round, items: [] };
+      rounds.push(bucket);
+    }
+    bucket.items.push(pk);
+  }
+
+  return (
+    <div className="card">
+      <div className="card-title">Draft Review</div>
+      {sorted.length === 0 ? (
+        <p className="text-sm text-gray-400">No picks recorded.</p>
+      ) : (
+        <div className="space-y-4">
+          {rounds.map(({ round, items }) => (
+            <div key={round}>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-masters-green/60 mb-1.5">
+                Round {round}
+              </div>
+              <div className="space-y-0.5">
+                {items.map((pk) => {
+                  const pos = (pk.pick_number % teams) + 1;
+                  const g = gById.get(pk.golfer_id);
+                  const p = pById.get(pk.participant_id);
+                  const c = teamColor(p?.draft_position);
+                  return (
+                    <div
+                      key={pk.pick_number}
+                      className="flex items-center gap-3 text-sm py-1.5 border-b border-masters-green-light/40 last:border-0"
+                    >
+                      <span className="w-10 shrink-0 font-mono text-xs font-bold tabular-nums text-masters-green">
+                        {round}.{pos}
+                      </span>
+                      <span className="flex-1 min-w-0 truncate font-medium text-gray-800">
+                        {g?.name || '—'}
+                      </span>
+                      <span
+                        className="inline-flex items-center gap-1.5 shrink-0 text-xs font-semibold"
+                        style={{ color: c.hex || undefined }}
+                      >
+                        <span
+                          className="w-2 h-2 rounded-full"
+                          style={{ backgroundColor: c.hex || '#9ca3af' }}
+                        />
+                        <span className="max-w-[120px] truncate">{p?.display_name}</span>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

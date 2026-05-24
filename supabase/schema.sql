@@ -40,7 +40,7 @@ create table public.draft_state (
   counting_scores          int not null default 3,            -- best N of golfers_per_team
   cut_penalty              int not null default 16,
   course_par               int not null default 72,
-  pick_timer_seconds       int not null default 3600,         -- 1 hour
+  pick_timer_seconds       int not null default 0,            -- 0 = no timer (admin can set one)
   tournament_name          text not null default 'The Masters',
   event_id                 text,                              -- ESPN event id the pool is set to (null = follow current)
   updated_at               timestamptz not null default now()
@@ -86,7 +86,7 @@ create unique index participants_position_idx on public.participants (draft_posi
 create table public.picks (
   id             uuid primary key default gen_random_uuid(),
   participant_id uuid not null references public.participants(id) on delete cascade,
-  golfer_id      uuid not null references public.golfers(id) on delete cascade,
+  golfer_id      uuid not null references public.golfers(id) on delete restrict,
   pick_number    int not null,
   created_at     timestamptz not null default now()
 );

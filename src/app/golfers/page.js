@@ -6,6 +6,7 @@ import { Loading, PageHeader } from '@/app/page';
 import { adjustedTotal, scoreText, scoreColor, liveRoundIndex } from '@/lib/scoring';
 import { teamColor } from '@/lib/teamColors';
 import PlayerScorecard from '@/components/PlayerScorecard';
+import LiveStatus from '@/components/LiveStatus';
 
 const FILTERS = ['all', 'drafted'];
 
@@ -166,19 +167,7 @@ export default function FieldPage() {
         title="The Field"
         subtitle={settings?.tournament_name}
         action={
-          <div className="text-right">
-            <button onClick={loadLive} className="btn-outline btn-sm">
-              {live.status === 'loading' ? 'Refreshing…' : '↻ Live'}
-            </button>
-            {live.status === 'ok' && live.updatedAt && (
-              <div className="text-[10px] text-gray-400 mt-1">
-                ESPN · {new Date(live.updatedAt).toLocaleTimeString()}
-              </div>
-            )}
-            {live.status === 'error' && (
-              <div className="text-[10px] text-score-over mt-1">live feed unavailable</div>
-            )}
-          </div>
+          <LiveStatus status={live.status} updatedAt={live.updatedAt} onRefresh={loadLive} />
         }
       />
 

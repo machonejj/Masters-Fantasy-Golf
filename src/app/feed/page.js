@@ -1,11 +1,12 @@
 'use client';
 
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { Loading, PageHeader } from '@/app/page';
 import { scoreText, scoreColor } from '@/lib/scoring';
 import { teamColor } from '@/lib/teamColors';
 import ProbChart from '@/components/ProbChart';
 import PlayerScorecard from '@/components/PlayerScorecard';
+import LiveStatus from '@/components/LiveStatus';
 
 const FILTERS = [
   { key: 'all', label: 'All' },
@@ -48,29 +49,33 @@ export default function LiveFeedPage() {
   const [newKeys, setNewKeys] = useState(() => new Set());
   const [selected, setSelected] = useState(null); // golfer to show the scorecard for
   const seenRef = useRef(null);
+  const aliveRef = useRef(true);
 
   const openCard = (e) =>
     setSelected({ name: e.golfer, owner: e.team, teamSeed: e.seed, athleteId: e.athleteId ?? null });
 
+  const load = useCallback(() => {
+    setStatus('loading');
+    return fetch('/api/feed')
+      .then((r) => r.json())
+      .then((d) => {
+        if (aliveRef.current) {
+          setData(d);
+          setStatus('ok');
+        }
+      })
+      .catch(() => aliveRef.current && setStatus('error'));
+  }, []);
+
   useEffect(() => {
-    let alive = true;
-    const load = () =>
-      fetch('/api/feed')
-        .then((r) => r.json())
-        .then((d) => {
-          if (alive) {
-            setData(d);
-            setStatus('ok');
-          }
-        })
-        .catch(() => alive && setStatus('error'));
+    aliveRef.current = true;
     load();
     const t = setInterval(load, 90000);
     return () => {
-      alive = false;
+      aliveRef.current = false;
       clearInterval(t);
     };
-  }, []);
+  }, [load]);
 
   // Flag freshly-arrived events so they animate in — but never on the first
   // load (otherwise the whole list would slide in at once).
@@ -101,7 +106,11 @@ export default function LiveFeedPage() {
 
   return (
     <div>
-      <PageHeader title="Live Feed" subtitle="Birdies, bogeys & big moments" />
+      <PageHeader
+        title="Live Feed"
+        subtitle="Birdies, bogeys & big moments"
+        action={<LiveStatus status={status} updatedAt={data?.updatedAt} onRefresh={load} />}
+      />
 
       {teams.length > 0 && (
         <div className="card mb-4">

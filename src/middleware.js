@@ -12,6 +12,6 @@ export const config = {
      * - favicon, image, and video/static media files
      * - /api routes (they validate auth themselves)
      */
-    '/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|webm|mov|ico)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|webm|mov|mp3|wav|ogg|ico)$).*)',
   ],
 };

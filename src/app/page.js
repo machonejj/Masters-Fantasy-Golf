@@ -6,6 +6,7 @@ import { teamData, scoreText, scoreColor, liveRoundIndex } from '@/lib/scoring';
 import { teamColor } from '@/lib/teamColors';
 import { useLiveScores, mergeLive } from '@/lib/useLiveScores';
 import PlayerScorecard from '@/components/PlayerScorecard';
+import LiveStatus from '@/components/LiveStatus';
 
 export default function LeaderboardPage() {
   const { loading, user, settings, participants, golfers, picks } = usePoolData();
@@ -22,7 +23,7 @@ export default function LeaderboardPage() {
     });
 
   // Live ESPN scores, refreshed on an interval, so standings stay current.
-  const { live, updatedAt } = useLiveScores();
+  const { live, updatedAt, status: liveStatus, refresh: refreshLive } = useLiveScores();
   const liveGolfers = useMemo(() => golfers.map((g) => mergeLive(g, live)), [golfers, live]);
 
   const standings = useMemo(() => {
@@ -48,19 +49,7 @@ export default function LeaderboardPage() {
           settings?.counting_scores ?? 3
         } of ${settings?.golfers_per_team ?? 6} count`}
         action={
-          live ? (
-            <div className="text-right">
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-masters-green">
-                <span className="w-1.5 h-1.5 rounded-full bg-score-under animate-pulse" />
-                Live
-              </span>
-              {updatedAt && (
-                <div className="text-[10px] text-gray-400">
-                  ESPN · {new Date(updatedAt).toLocaleTimeString()}
-                </div>
-              )}
-            </div>
-          ) : null
+          <LiveStatus status={liveStatus} updatedAt={updatedAt} onRefresh={refreshLive} />
         }
       />
 
@@ -149,13 +138,9 @@ export default function LeaderboardPage() {
                                 }
                                 className={`flex items-center gap-2 py-1.5 text-sm border-t border-masters-green-light/60 first:border-0 cursor-pointer rounded -mx-1 px-1 ${
                                   missedCut ? 'bg-red-50 hover:bg-red-100/70' : 'hover:bg-white/60'
-                                }`}
+                                } ${counts ? 'ring-1 ring-inset ring-masters-green-mid/50' : ''}`}
+                                title={counts ? 'Counts toward the team score' : undefined}
                               >
-                                {counts && (
-                                  <span className="chip shrink-0 bg-masters-gold-light text-masters-green">
-                                    counts
-                                  </span>
-                                )}
                                 <span
                                   className={`flex-1 min-w-0 truncate ${
                                     g.status !== 'active' ? 'text-gray-400 line-through' : ''

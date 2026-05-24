@@ -31,7 +31,11 @@ export async function POST(request) {
         .from('draft_state')
         .update({
           status: 'active',
-          pick_deadline: new Date(now + state.pick_timer_seconds * 1000).toISOString(),
+          // No timer (0) → no clock; picks have unlimited time.
+          pick_deadline:
+            state.pick_timer_seconds > 0
+              ? new Date(now + state.pick_timer_seconds * 1000).toISOString()
+              : null,
           paused_remaining_seconds: null,
           updated_at: new Date().toISOString(),
         })
@@ -61,7 +65,39 @@ export async function POST(request) {
         .from('draft_state')
         .update({
           status: 'active',
-          pick_deadline: new Date(now + remaining * 1000).toISOString(),
+          pick_deadline:
+            state.pick_timer_seconds > 0
+              ? new Date(now + remaining * 1000).toISOString()
+              : null,
+          paused_remaining_seconds: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', 1);
+      break;
+    }
+
+    case 'undo': {
+      // Remove the most recent pick: frees that golfer and rewinds the clock so
+      // the same team is back on the clock. Reopens a completed draft.
+      const { data: lastPick } = await db
+        .from('picks')
+        .select('*')
+        .order('pick_number', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!lastPick) {
+        return NextResponse.json({ error: 'No picks to undo.' }, { status: 400 });
+      }
+      await db.from('picks').delete().eq('id', lastPick.id);
+      await db
+        .from('draft_state')
+        .update({
+          status: 'active',
+          current_pick: lastPick.pick_number,
+          pick_deadline:
+            state.pick_timer_seconds > 0
+              ? new Date(now + state.pick_timer_seconds * 1000).toISOString()
+              : null,
           paused_remaining_seconds: null,
           updated_at: new Date().toISOString(),
         })

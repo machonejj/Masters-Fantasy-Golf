@@ -243,6 +243,20 @@ function DraftControls({ settings, participants, busy, run, flash }) {
             ▶ Resume
           </button>
         )}
+        {(settings?.current_pick ?? 0) > 0 && (
+          <button
+            disabled={busy}
+            onClick={() =>
+              control(
+                'undo',
+                'Undo the last pick? It frees that golfer and puts that team back on the clock.'
+              )
+            }
+            className="btn-outline"
+          >
+            ↶ Undo last pick
+          </button>
+        )}
         <button
           disabled={busy}
           onClick={() =>
@@ -254,8 +268,9 @@ function DraftControls({ settings, participants, busy, run, flash }) {
         </button>
       </div>
       <p className="text-xs text-gray-400 mt-3">
-        Each pick has a {Math.round((settings?.pick_timer_seconds ?? 3600) / 60)}-minute clock; on
-        timeout the best available golfer is auto-drafted.
+        {settings?.pick_timer_seconds > 0
+          ? `Each pick has a ${Math.round(settings.pick_timer_seconds / 60)}-minute clock; on timeout the best available golfer is auto-drafted.`
+          : 'No pick timer — picks have unlimited time. Set one in Pool Settings if you want a clock.'}
       </p>
     </div>
   );
@@ -632,7 +647,10 @@ function Settings({ settings, busy, run, flash }) {
           counting_scores: Number(form.counting_scores),
           cut_penalty: Number(form.cut_penalty),
           course_par: Number(form.course_par),
-          pick_timer_seconds: Math.max(60, Number(form.pick_timer_minutes) * 60),
+          pick_timer_seconds:
+            Number(form.pick_timer_minutes) > 0
+              ? Math.max(60, Number(form.pick_timer_minutes) * 60)
+              : 0,
         },
       });
       flash('ok', 'Settings saved.');
@@ -658,8 +676,14 @@ function Settings({ settings, busy, run, flash }) {
         <Field label="Course par">
           <input type="number" className="input" value={form.course_par} onChange={set('course_par')} />
         </Field>
-        <Field label="Pick timer (min)">
-          <input type="number" className="input" value={form.pick_timer_minutes} onChange={set('pick_timer_minutes')} />
+        <Field label="Pick timer (min · 0 = none)">
+          <input
+            type="number"
+            min="0"
+            className="input"
+            value={form.pick_timer_minutes}
+            onChange={set('pick_timer_minutes')}
+          />
         </Field>
       </div>
       <button disabled={busy} onClick={save} className="btn-primary mt-4">

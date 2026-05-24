@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { generateCode, playerEmail } from '@/lib/access-codes';
+import { codeFromName, playerEmail } from '@/lib/access-codes';
 
 // GET — admin only: each participant's login code, read from the hidden
 // Supabase account's metadata. Codes live there (never on the world-readable
@@ -39,12 +39,14 @@ export async function POST(request) {
 
   const db = createAdminClient();
 
-  // Create the account, retrying on the (rare) chance a code collides.
+  // Create the account with a memorable initials+digit code (e.g. "JM5"),
+  // retrying on collision. Since initials+one-digit gives only 9 variants, the
+  // later attempts add a second digit so repeated initials still resolve.
   let code;
   let user;
   let lastErr;
-  for (let attempt = 0; attempt < 5; attempt++) {
-    code = generateCode(6);
+  for (let attempt = 0; attempt < 8; attempt++) {
+    code = codeFromName(name, attempt >= 5);
     const { data, error } = await db.auth.admin.createUser({
       email: playerEmail(code),
       password: code,
