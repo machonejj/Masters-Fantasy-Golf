@@ -52,3 +52,42 @@ export function normalizePlayerCode(code) {
 export function playerEmail(code) {
   return `${normalizePlayerCode(code).toLowerCase()}@${PLAYER_EMAIL_DOMAIN}`;
 }
+
+// ── Admin codes ────────────────────────────────────────────────────────────
+// ADMIN_ACCESS_CODE is comma-separated to allow several admins (e.g. "TOMMY,JAKE").
+// Each code maps to its OWN hidden admin account, so multiple admins can be
+// signed in at the same time.
+export const ADMIN_EMAIL_DOMAIN = 'admins.masters.pool';
+
+const normAdmin = (code) => (code || '').trim().toUpperCase();
+
+export function adminCodes() {
+  return (process.env.ADMIN_ACCESS_CODE || '')
+    .split(',')
+    .map((c) => c.trim())
+    .filter(Boolean);
+}
+
+// The configured admin code matching a typed code (case-insensitive), or null.
+export function matchAdminCode(typed) {
+  const t = normAdmin(typed);
+  return adminCodes().find((c) => normAdmin(c) === t) || null;
+}
+
+// Hidden login email for an admin code, e.g. "jake@admins.masters.pool".
+export function adminEmail(code) {
+  const slug = normAdmin(code).toLowerCase().replace(/[^a-z0-9]/g, '') || 'admin';
+  return `${slug}@${ADMIN_EMAIL_DOMAIN}`;
+}
+
+// Deterministic password ≥6 chars, so short codes like "JAKE" still satisfy
+// Supabase's minimum password length.
+export function adminPassword(code) {
+  return `${normAdmin(code)}-augusta-admin`;
+}
+
+// Friendly display name, e.g. "JAKE" → "Jake".
+export function adminDisplayName(code) {
+  const c = normAdmin(code);
+  return c ? c.charAt(0) + c.slice(1).toLowerCase() : 'Admin';
+}

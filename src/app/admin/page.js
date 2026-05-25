@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { usePoolData } from '@/lib/usePoolData';
 import { Loading, PageHeader } from '@/app/page';
 import { snakePicker, totalPicks, isDraftComplete } from '@/lib/draft';
@@ -17,7 +17,7 @@ async function api(url, method, body) {
 }
 
 export default function AdminPage() {
-  const { loading, profile, settings, participants, golfers, picks, refresh } =
+  const { loading, profile, settings, participants, golfers, refresh } =
     usePoolData({ pollMs: 10000 });
   const [msg, setMsg] = useState(null); // {type, text}
   const [busy, setBusy] = useState(false);
@@ -74,14 +74,6 @@ export default function AdminPage() {
       />
       <Participants
         participants={participants}
-        settings={settings}
-        busy={busy}
-        run={run}
-        flash={flash}
-      />
-      <Scores
-        golfers={golfers}
-        picks={picks}
         settings={settings}
         busy={busy}
         run={run}
@@ -457,161 +449,6 @@ function Participants({ participants, settings, busy, run, flash }) {
         Each player logs in with their code at the sign-in screen — no email or password needed.
         Click a code to copy it.
       </p>
-    </div>
-  );
-}
-
-/* ── Scores / field ──────────────────────────────────────────── */
-function Scores({ golfers, picks, settings, busy, run, flash }) {
-  const [search, setSearch] = useState('');
-  const [newName, setNewName] = useState('');
-  const draftedIds = useMemo(() => new Set(picks.map((p) => p.golfer_id)), [picks]);
-
-  const rows = useMemo(
-    () =>
-      golfers
-        .filter((g) => g.name.toLowerCase().includes(search.toLowerCase()))
-        .slice(0, 250),
-    [golfers, search]
-  );
-
-  return (
-    <div className="card">
-      <div className="card-title">Field &amp; Scores ({golfers.length})</div>
-
-      <div className="flex flex-wrap gap-2 mb-4">
-        {golfers.length === 0 && (
-          <button
-            disabled={busy}
-            onClick={() =>
-              run(async () => {
-                const r = await api('/api/admin/golfers', 'POST', { action: 'seed' });
-                flash('ok', `Loaded ${r.inserted} golfers.`);
-              })
-            }
-            className="btn-primary"
-          >
-            ⬇ Load default field
-          </button>
-        )}
-        <button
-          disabled={busy}
-          onClick={() =>
-            run(async () => {
-              const r = await api('/api/admin/golfers', 'POST', { action: 'syncLive' });
-              flash('ok', `Synced ${r.updated} golfers from ESPN${r.tournament ? ` (${r.tournament})` : ''}.`);
-            })
-          }
-          className="btn-gold"
-        >
-          ↻ Pull live scores (ESPN)
-        </button>
-        {golfers.length > 0 && (
-          <button
-            disabled={busy}
-            onClick={() =>
-              run(async () => {
-                if (!window.confirm('Clear the entire field?')) return;
-                await api('/api/admin/golfers?all=true', 'DELETE');
-                flash('ok', 'Field cleared.');
-              })
-            }
-            className="btn-danger"
-          >
-            Clear field
-          </button>
-        )}
-        <div className="flex gap-2 items-end ml-auto">
-          <input
-            className="input !py-1.5 max-w-[150px]"
-            placeholder="Add golfer…"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-          />
-          <button
-            disabled={busy || !newName.trim()}
-            onClick={() =>
-              run(async () => {
-                await api('/api/admin/golfers', 'POST', { action: 'add', name: newName.trim() });
-                setNewName('');
-              })
-            }
-            className="btn-outline btn-sm"
-          >
-            +
-          </button>
-        </div>
-      </div>
-
-      {golfers.length > 0 && (
-        <>
-          <input
-            className="input mb-3"
-            placeholder="Filter golfers…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <p className="text-xs text-gray-400 mb-2">
-            Enter each round as to-par (e.g. -3, 2) or raw strokes (e.g. 69). Save per row.
-          </p>
-          <div className="max-h-[420px] overflow-y-auto -mx-1 px-1">
-            {rows.map((g) => (
-              <GolferRow key={g.id} g={g} drafted={draftedIds.has(g.id)} busy={busy} run={run} />
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function GolferRow({ g, drafted, busy, run }) {
-  const [form, setForm] = useState({
-    r1: g.r1 ?? '',
-    r2: g.r2 ?? '',
-    r3: g.r3 ?? '',
-    r4: g.r4 ?? '',
-    status: g.status,
-  });
-
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-
-  return (
-    <div className="flex items-center gap-1.5 py-1.5 border-b border-masters-green-light/60 last:border-0">
-      <span className="w-44 text-sm truncate" title={g.name}>
-        <span className="text-xs text-gray-400 mr-1">#{g.rank ?? '–'}</span>
-        {g.name}
-      </span>
-      {['r1', 'r2', 'r3', 'r4'].map((r) => (
-        <input
-          key={r}
-          className="input !p-1 !w-12 text-center text-xs"
-          value={form[r]}
-          onChange={set(r)}
-          placeholder={r.toUpperCase()}
-        />
-      ))}
-      <select className="input !p-1 !w-20 text-xs" value={form.status} onChange={set('status')}>
-        <option value="active">active</option>
-        <option value="cut">cut</option>
-        <option value="wd">wd</option>
-      </select>
-      <button
-        disabled={busy}
-        onClick={() => run(() => api('/api/admin/golfers', 'PATCH', { id: g.id, ...form }))}
-        className="btn-primary btn-sm"
-      >
-        Save
-      </button>
-      {!drafted && (
-        <button
-          disabled={busy}
-          onClick={() => run(() => api(`/api/admin/golfers?id=${g.id}`, 'DELETE'))}
-          className="btn-danger btn-sm"
-        >
-          ✕
-        </button>
-      )}
     </div>
   );
 }

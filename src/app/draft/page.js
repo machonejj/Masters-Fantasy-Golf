@@ -22,6 +22,8 @@ export default function DraftPage() {
 
   const [now, setNow] = useState(Date.now());
   const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState('fav'); // 'fav' (world ranking) | 'name'
+  const [tier, setTier] = useState(0); // 0 = whole field; else max world rank (10/25/50)
   const [picking, setPicking] = useState(false);
   const [error, setError] = useState('');
   const [pickReveal, setPickReveal] = useState(null); // { name, team, seed, mine, athleteId }
@@ -96,11 +98,13 @@ export default function DraftPage() {
   }, [status, hasTimer, refresh]);
 
   // Detect a new pick (mine, someone else's, or an auto-pick) and fire the
-  // reveal animation. Skips the very first load so existing picks don't replay.
+  // reveal animation. Waits for the pool to load before setting the baseline, so
+  // the last pick doesn't replay every time the page mounts / the tab is revisited.
   useEffect(() => {
+    if (loading) return;
     const maxPick = picks.length ? picks.reduce((m, p) => Math.max(m, p.pick_number), -1) : -1;
     if (seenPickRef.current === null) {
-      seenPickRef.current = maxPick; // first load — don't animate the backlog
+      seenPickRef.current = maxPick; // baseline once loaded — don't animate the backlog
       return;
     }
     if (maxPick > seenPickRef.current) {
@@ -108,27 +112,32 @@ export default function DraftPage() {
       const g = golfers.find((x) => x.id === latest?.golfer_id);
       const part = participants.find((x) => x.id === latest?.participant_id);
       if (g) {
+        const mine = !!myParticipant && part?.id === myParticipant.id;
         setPickReveal({
           name: g.name,
           team: part?.display_name,
           seed: part?.draft_position,
-          mine: !!myParticipant && part?.id === myParticipant.id,
+          mine,
           athleteId: live?.[g.name.toLowerCase()]?.athleteId ?? null,
         });
-        const a = pickSound.current;
-        if (a) {
-          try {
-            a.currentTime = 0;
-            a.play().catch(() => {}); // ignore autoplay-policy blocks
-          } catch {
-            /* no-op */
+        // Chime only when YOUR team's pick is made; the name + face reveal still
+        // shows for every pick.
+        if (mine) {
+          const a = pickSound.current;
+          if (a) {
+            try {
+              a.currentTime = 0;
+              a.play().catch(() => {}); // ignore autoplay-policy blocks
+            } catch {
+              /* no-op */
+            }
           }
         }
       }
     }
     // Always resync — also handles undo (maxPick drops) so a re-pick re-animates.
     seenPickRef.current = maxPick;
-  }, [picks, golfers, participants, live, myParticipant]);
+  }, [loading, picks, golfers, participants, live, myParticipant]);
 
   // Auto-dismiss the reveal.
   useEffect(() => {
@@ -138,12 +147,29 @@ export default function DraftPage() {
   }, [pickReveal]);
 
   const takenIds = useMemo(() => new Set(picks.map((p) => p.golfer_id)), [picks]);
-  const available = useMemo(
-    () =>
-      golfers
-        .filter((g) => !takenIds.has(g.id))
-        .filter((g) => g.name.toLowerCase().includes(search.toLowerCase())),
-    [golfers, takenIds, search]
+  const available = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const list = golfers
+      .filter((g) => !takenIds.has(g.id))
+      .filter((g) => g.name.toLowerCase().includes(q))
+      // Tier = "favorites" buckets by world ranking (unranked never make the cut).
+      .filter((g) => (tier ? g.rank != null && g.rank <= tier : true));
+    if (sortBy === 'name') {
+      return [...list].sort((a, b) => a.name.localeCompare(b.name));
+    }
+    // Favorites: best world ranking first; unranked longshots fall to the bottom.
+    return [...list].sort((a, b) => {
+      const ra = a.rank ?? Infinity;
+      const rb = b.rank ?? Infinity;
+      return ra === rb ? a.name.localeCompare(b.name) : ra - rb;
+    });
+  }, [golfers, takenIds, search, sortBy, tier]);
+
+  // How many of the remaining field are world-ranked — tells us whether the
+  // "Favorites" ordering is meaningful or the event simply has no ranking data.
+  const rankedCount = useMemo(
+    () => available.filter((g) => g.rank != null).length,
+    [available]
   );
 
   async function draftGolfer(golferId) {
@@ -264,25 +290,78 @@ export default function DraftPage() {
               <p className="text-xs text-gray-400 mb-3">Waiting for your turn…</p>
             )
           )}
+          {/* Favorites filter (by world ranking) + sort + search ─────────── */}
+          <div className="flex flex-wrap items-center gap-1.5 mb-2">
+            {[
+              { v: 0, label: 'All' },
+              { v: 10, label: 'Top 10' },
+              { v: 25, label: 'Top 25' },
+              { v: 50, label: 'Top 50' },
+            ].map((t) => (
+              <button
+                key={t.v}
+                onClick={() => setTier(t.v)}
+                className={`px-2.5 py-1 rounded-full text-xs font-semibold transition ${
+                  tier === t.v
+                    ? 'bg-masters-green text-white'
+                    : 'bg-masters-green-light/40 text-masters-green-mid hover:bg-masters-green-light'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+            <div className="ml-auto inline-flex rounded-full bg-masters-green-light/40 p-0.5 text-xs font-semibold">
+              {[
+                { v: 'fav', label: 'Favorites' },
+                { v: 'name', label: 'A–Z' },
+              ].map((s) => (
+                <button
+                  key={s.v}
+                  onClick={() => setSortBy(s.v)}
+                  className={`px-2.5 py-1 rounded-full transition ${
+                    sortBy === s.v
+                      ? 'bg-white text-masters-green shadow-sm'
+                      : 'text-masters-green-mid hover:text-masters-green'
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <input
-            className="input mb-3"
+            className="input mb-2"
             placeholder="Search golfers…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          {sortBy === 'fav' && (
+            <p className="text-[11px] text-gray-400 mb-2">
+              {rankedCount > 0
+                ? 'Ordered by world ranking — the betting-favorite order.'
+                : 'No world ranking for this field yet — refresh the field in Admin.'}
+            </p>
+          )}
           <div className="max-h-[460px] overflow-y-auto -mx-1 px-1">
             {available.map((g) => {
               const canPick =
                 status === 'active' && !complete && (isMyTurn || profile?.is_admin);
+              const fav = g.rank != null && g.rank <= 10; // a clear betting favorite
               return (
                 <div
                   key={g.id}
                   className="flex items-center justify-between py-2 border-b border-masters-green-light/60 last:border-0"
                 >
-                  <div className="min-w-0">
-                    <span className="text-xs text-gray-400 mr-2">#{g.rank ?? '–'}</span>
-                    <span className="font-medium">{g.name}</span>
-                    {g.odds && <span className="text-xs text-gray-400 ml-2">{g.odds}</span>}
+                  <div className="min-w-0 flex items-center gap-2">
+                    <span
+                      className={`text-xs tabular-nums w-8 shrink-0 text-right ${
+                        fav ? 'text-masters-gold font-bold' : 'text-gray-400'
+                      }`}
+                    >
+                      {g.rank != null ? `#${g.rank}` : '–'}
+                    </span>
+                    <span className="font-medium truncate">{g.name}</span>
+                    {g.odds && <span className="text-xs text-gray-400 shrink-0">{g.odds}</span>}
                   </div>
                   {canPick && (
                     <button

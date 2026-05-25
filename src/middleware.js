@@ -10,8 +10,9 @@ export const config = {
      * Run on every route except:
      * - _next static/image assets
      * - favicon, image, and video/static media files
+     * - the PWA manifest (must be publicly fetchable for install)
      * - /api routes (they validate auth themselves)
      */
-    '/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|webm|mov|mp3|wav|ogg|ico)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|webm|mov|mp3|wav|ogg|ico|json|webmanifest)$).*)',
   ],
 };

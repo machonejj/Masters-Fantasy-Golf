@@ -144,13 +144,19 @@ export default function FieldPage() {
 
   if (loading) return <Loading />;
 
-  // The cut happens once, after R2. While R1–R2 are underway it's a projection
-  // (from ESPN). Once it's been made — any golfer is cut, or R3 scoring has begun
-  // — it's final and already baked into the board via cut status (MC + red), so
-  // we stop showing the "projected cut" line/divider from R3 on.
+  // The projected cut line only shows on day 2 (Round 2 in progress) and adjusts
+  // as ESPN's projection moves. It never shows in R1, and once R2 is complete
+  // (golfers get marked cut) the cut is final and baked into the board, so it
+  // disappears for the weekend (R3/R4).
   const cut = live.cut;
-  const cutMade = merged.some((r) => r.status === 'cut' || r.rounds?.[2] != null);
-  const showCut = cut?.score != null && !cutMade;
+  const currentRound = Math.max(
+    0,
+    ...merged.map(
+      (r) => (r.rounds || []).filter((v) => v !== null && v !== undefined && v !== '').length
+    )
+  );
+  const anyCut = merged.some((r) => r.status === 'cut' || r.status === 'wd');
+  const showCut = cut?.score != null && currentRound === 2 && !anyCut;
   // The divider is shown only on the full, total-sorted board, where row order
   // reflects the actual standings.
   const showCutDivider = showCut && filter === 'all' && sort.key === 'total' && sort.dir === 'asc';
