@@ -3,22 +3,14 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-
-const TABS = [
-  { href: '/', label: 'Standings' },
-  { href: '/golfers', label: 'The Field' },
-  { href: '/feed', label: 'Live Feed' },
-  { href: '/draft', label: 'Draft Room' },
-];
+import { navTabs } from '@/lib/tabs';
 
 export default function NavBar({ profile }) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
 
-  const tabs = profile?.is_admin
-    ? [...TABS, { href: '/admin', label: 'Admin' }]
-    : TABS;
+  const tabs = navTabs(profile?.is_admin);
 
   async function signOut() {
     try {

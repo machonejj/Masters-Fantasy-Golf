@@ -1,6 +1,7 @@
 import './globals.css';
 import { createClient } from '@/lib/supabase/server';
 import NavBar from '@/components/NavBar';
+import SwipeNav from '@/components/SwipeNav';
 
 export const metadata = {
   title: 'Augusta Pickem',
@@ -34,7 +35,9 @@ export default async function RootLayout({ children }) {
     <html lang="en">
       <body>
         {user && <NavBar profile={profile} />}
-        <main className="max-w-5xl mx-auto px-4 py-6">{children}</main>
+        <main className="max-w-5xl mx-auto px-4 py-6 overflow-x-clip">
+          {user ? <SwipeNav isAdmin={!!profile?.is_admin}>{children}</SwipeNav> : children}
+        </main>
       </body>
     </html>
   );
