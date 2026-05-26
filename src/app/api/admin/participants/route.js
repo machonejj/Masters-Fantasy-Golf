@@ -129,6 +129,44 @@ export async function PATCH(request) {
 
   const body = await request.json().catch(() => ({}));
   const db = createAdminClient();
+
+  if (body.action === 'bench') {
+    // Sit a player out (or bring them back) for the current tournament. Blocked
+    // mid-draft because the snake order would shift out from under live picks —
+    // set the roster before starting (status pending) or after it finishes.
+    const { id, sitting_out } = body;
+    if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
+
+    const { data: state } = await db
+      .from('draft_state')
+      .select('status')
+      .eq('id', 1)
+      .maybeSingle();
+    if (state?.status === 'active' || state?.status === 'paused') {
+      return NextResponse.json(
+        { error: 'Pause-free zone: finish or reset the draft before changing who’s sitting out.' },
+        { status: 409 }
+      );
+    }
+
+    const { error } = await db
+      .from('participants')
+      .update({ sitting_out: !!sitting_out })
+      .eq('id', id);
+    if (error) {
+      const missingCol = /column|sitting_out/i.test(error.message || '');
+      return NextResponse.json(
+        {
+          error: missingCol
+            ? 'Add the participants.sitting_out column in Supabase first (see schema.sql), then try again.'
+            : error.message,
+        },
+        { status: missingCol ? 500 : 400 }
+      );
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   const { data: participants } = await db
     .from('participants')
     .select('*')
@@ -141,20 +179,6 @@ export async function PATCH(request) {
       const j = Math.floor(Math.random() * (i + 1));
       [ids[i], ids[j]] = [ids[j], ids[i]];
     }
-    await applyOrder(db, ids);
-    return NextResponse.json({ ok: true });
-  }
-
-  if (body.action === 'move') {
-    const { id, direction } = body;
-    const ordered = participants;
-    const idx = ordered.findIndex((p) => p.id === id);
-    const swap = direction === 'up' ? idx - 1 : idx + 1;
-    if (idx === -1 || swap < 0 || swap >= ordered.length) {
-      return NextResponse.json({ ok: true }); // no-op at the ends
-    }
-    const ids = ordered.map((p) => p.id);
-    [ids[idx], ids[swap]] = [ids[swap], ids[idx]];
     await applyOrder(db, ids);
     return NextResponse.json({ ok: true });
   }

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { snakePicker, isDraftComplete } from '@/lib/draft';
+import { snakePicker, isDraftComplete, activeParticipants } from '@/lib/draft';
 import { advanceDraft } from '@/lib/draft-server';
 
 export async function POST(request) {
@@ -20,10 +20,14 @@ export async function POST(request) {
       db.from('golfers').select('*').eq('id', golferId).maybeSingle(),
     ]);
 
+  // Only players taking part this tournament are in the snake order; a player
+  // who's sitting out is skipped entirely (and can't pick).
+  const active = activeParticipants(participants || []);
+
   if (!state || state.status !== 'active') {
     return NextResponse.json({ error: 'The draft is not active.' }, { status: 409 });
   }
-  if (isDraftComplete(state, participants || [], state.golfers_per_team)) {
+  if (isDraftComplete(state, active, state.golfers_per_team)) {
     return NextResponse.json({ error: 'The draft is complete.' }, { status: 409 });
   }
   if (!golfer) return NextResponse.json({ error: 'Golfer not found.' }, { status: 404 });
@@ -31,10 +35,10 @@ export async function POST(request) {
     return NextResponse.json({ error: 'That golfer is already drafted.' }, { status: 409 });
   }
 
-  const onClock = snakePicker(state.current_pick, participants || []);
+  const onClock = snakePicker(state.current_pick, active);
   if (!onClock) return NextResponse.json({ error: 'No participant on the clock.' }, { status: 409 });
 
-  const myParticipant = (participants || []).find((p) => p.user_id === ctx.user.id);
+  const myParticipant = active.find((p) => p.user_id === ctx.user.id);
   const isMyTurn = myParticipant && myParticipant.id === onClock.id;
   if (!isMyTurn && !ctx.profile?.is_admin) {
     return NextResponse.json({ error: "It's not your turn." }, { status: 403 });
@@ -50,6 +54,6 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Pick conflict — try again.' }, { status: 409 });
   }
 
-  const result = await advanceDraft(db, state, participants || []);
+  const result = await advanceDraft(db, state, active);
   return NextResponse.json({ ok: true, advanced: true, ...result });
 }

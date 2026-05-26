@@ -3,20 +3,28 @@
 // need — fetched once so a page can build both without double-hitting ESPN.
 import { createAdminClient } from './supabase/admin';
 import { fetchEspnLeaderboard, fetchEspnScorecard } from './espn';
+import { activeParticipants } from './draft';
 
 export async function buildPoolLive(userId) {
   const db = createAdminClient();
-  const [{ data: settings }, { data: participants }, { data: picks }, { data: golfers }] =
+  const [{ data: allParticipants }, { data: settings }, { data: picks }, { data: golfers }] =
     await Promise.all([
+      // select('*') (not an explicit column list) so the query still works
+      // before the sitting_out migration runs — activeParticipants treats a
+      // missing/undefined flag as "active".
+      db.from('participants').select('*'),
       db.from('draft_state').select('*').eq('id', 1).maybeSingle(),
-      db.from('participants').select('id, user_id, display_name, draft_position'),
       db.from('picks').select('participant_id, golfer_id'),
       db.from('golfers').select('id, name, r1, r2, r3, r4, status'),
     ]);
 
-  const me = (participants || []).find((p) => p.user_id === userId) || null;
-  if (!participants?.length || !picks?.length) {
-    return { settings, participants: participants || [], me, teams: [] };
+  // Players sitting out this tournament have no team — drop them from standings,
+  // the feed, and the win-probability field.
+  const participants = activeParticipants(allParticipants || []);
+
+  const me = participants.find((p) => p.user_id === userId) || null;
+  if (!participants.length || !picks?.length) {
+    return { settings, participants, me, teams: [] };
   }
 
   let board = null;

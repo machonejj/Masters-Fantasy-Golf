@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePoolData } from '@/lib/usePoolData';
 import { Loading, PageHeader } from '@/app/page';
-import { snakePicker, totalPicks, isDraftComplete } from '@/lib/draft';
+import { snakePicker, totalPicks, isDraftComplete, activeParticipants } from '@/lib/draft';
 import { teamColor } from '@/lib/teamColors';
 import { useLiveScores } from '@/lib/useLiveScores';
 
@@ -53,19 +53,24 @@ export default function DraftPage() {
   const gpt = draftState?.golfers_per_team ?? 6;
   const hasTimer = (draftState?.pick_timer_seconds ?? 0) > 0; // 0 = no time limit
 
+  // Players sitting out this tournament are skipped for the whole draft — the
+  // snake order, the clock, the board, and "your turn" all run over this set.
+  const activeParts = useMemo(() => activeParticipants(participants), [participants]);
+  const sittingOut = useMemo(() => participants.filter((p) => p.sitting_out), [participants]);
+
   const myParticipant = useMemo(
-    () => participants.find((p) => p.user_id === user?.id) || null,
-    [participants, user]
+    () => activeParts.find((p) => p.user_id === user?.id) || null,
+    [activeParts, user]
   );
 
   const complete =
-    draftState && isDraftComplete(draftState, participants, gpt);
+    draftState && isDraftComplete(draftState, activeParts, gpt);
   const onClock = useMemo(
     () =>
       draftState && !complete
-        ? snakePicker(draftState.current_pick, participants)
+        ? snakePicker(draftState.current_pick, activeParts)
         : null,
-    [draftState, participants, complete]
+    [draftState, activeParts, complete]
   );
 
   const isMyTurn = onClock && myParticipant && onClock.id === myParticipant.id;
@@ -193,7 +198,7 @@ export default function DraftPage() {
 
   if (loading) return <Loading />;
 
-  const total = totalPicks(participants, gpt);
+  const total = totalPicks(activeParts, gpt);
 
   return (
     <div>
@@ -231,7 +236,7 @@ export default function DraftPage() {
           <div className="min-w-0">
             <div className="text-xs uppercase tracking-wide text-gray-500">
               Pick {draftState.current_pick + 1} of {total} · Round{' '}
-              {Math.floor(draftState.current_pick / Math.max(participants.length, 1)) + 1}
+              {Math.floor(draftState.current_pick / Math.max(activeParts.length, 1)) + 1}
             </div>
             {isMyTurn ? (
               <div className="flex items-center gap-2 mt-1">
@@ -384,11 +389,16 @@ export default function DraftPage() {
         {/* ── Draft board / pick log ──────────────────────────────── */}
         <div className="card order-1">
           <div className="card-title">Draft Board</div>
+          {sittingOut.length > 0 && (
+            <p className="text-xs text-gray-400 mb-2">
+              🪑 Sitting out: {sittingOut.map((p) => p.display_name).join(', ')}
+            </p>
+          )}
           <div className="max-h-[520px] overflow-y-auto -mx-1 px-1 space-y-2.5">
-            {participants.length === 0 && (
-              <p className="text-sm text-gray-400">No participants yet.</p>
+            {activeParts.length === 0 && (
+              <p className="text-sm text-gray-400">No active players yet.</p>
             )}
-            {participants.map((p) => {
+            {activeParts.map((p) => {
               const c = teamColor(p.draft_position);
               const isMe = myParticipant?.id === p.id;
               const isOnClock = onClock?.id === p.id && status === 'active' && !complete;

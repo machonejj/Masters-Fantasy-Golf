@@ -3,10 +3,12 @@
 import { useMemo, useState } from 'react';
 import { usePoolData } from '@/lib/usePoolData';
 import { teamData, scoreText, scoreColor, liveRoundIndex } from '@/lib/scoring';
+import { activeParticipants } from '@/lib/draft';
 import { teamColor } from '@/lib/teamColors';
 import { useLiveScores, mergeLive } from '@/lib/useLiveScores';
 import PlayerScorecard from '@/components/PlayerScorecard';
 import LiveStatus from '@/components/LiveStatus';
+import SittingOutNotice from '@/components/SittingOutNotice';
 
 export default function LeaderboardPage() {
   const { loading, user, settings, participants, golfers, picks } = usePoolData();
@@ -26,9 +28,13 @@ export default function LeaderboardPage() {
   const { live, updatedAt, status: liveStatus, refresh: refreshLive } = useLiveScores();
   const liveGolfers = useMemo(() => golfers.map((g) => mergeLive(g, live)), [golfers, live]);
 
+  // Players sitting out this tournament have no team — keep them out of the
+  // standings, but list their names below so it's clear they're still in the pool.
+  const sittingOut = useMemo(() => participants.filter((p) => p.sitting_out), [participants]);
+
   const standings = useMemo(() => {
     if (!settings) return [];
-    return participants
+    return activeParticipants(participants)
       .map((p) => ({ p, ...teamData(p.id, picks, liveGolfers, settings) }))
       .sort((a, b) => {
         if (a.teamScore === null) return 1;
@@ -51,6 +57,12 @@ export default function LeaderboardPage() {
         action={
           <LiveStatus status={liveStatus} updatedAt={updatedAt} onRefresh={refreshLive} />
         }
+      />
+
+      <SittingOutNotice
+        participants={participants}
+        userId={user?.id}
+        tournament={settings?.tournament_name}
       />
 
       {standings.length === 0 ? (
@@ -166,6 +178,12 @@ export default function LeaderboardPage() {
             );
           })}
         </div>
+      )}
+
+      {sittingOut.length > 0 && (
+        <p className="text-xs text-gray-400 mt-3 px-1">
+          🪑 Sitting out this tournament: {sittingOut.map((p) => p.display_name).join(', ')}
+        </p>
       )}
 
       {selected && (

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { activeParticipants } from '@/lib/draft';
 
 export async function POST(request) {
   const ctx = await requireAdmin();
@@ -17,13 +18,14 @@ export async function POST(request) {
 
   switch (action) {
     case 'start': {
-      // Begins (or restarts) the clock from the current pick.
-      const { count } = await db
-        .from('participants')
-        .select('id', { count: 'exact', head: true });
-      if (!count) {
+      // Begins (or restarts) the clock from the current pick. Only players who
+      // aren't sitting out count toward the field. Read rows + filter in JS (not
+      // an .eq('sitting_out',…) filter) so this still works before the migration.
+      const { data: parts } = await db.from('participants').select('*');
+      const activeCount = activeParticipants(parts || []).length;
+      if (!activeCount) {
         return NextResponse.json(
-          { error: 'Add participants before starting the draft.' },
+          { error: 'Add (or bring back) at least one active player before starting the draft.' },
           { status: 400 }
         );
       }

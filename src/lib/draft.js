@@ -1,5 +1,14 @@
 // Pure snake-draft helpers — shared by client pages and server API routes.
 
+// Participants taking part in THIS tournament. A "sitting out" player is kept in
+// the pool (their account, login code, and season membership all persist) but is
+// skipped for the current tournament's draft, standings, and feed — like a poker
+// player sitting out a few hands. Always run the snake math over this set so the
+// client and server agree on who's on the clock.
+export function activeParticipants(participants) {
+  return (participants || []).filter((p) => !p?.sitting_out);
+}
+
 export function orderedParticipants(participants) {
   return [...participants].sort((a, b) => a.draft_position - b.draft_position);
 }

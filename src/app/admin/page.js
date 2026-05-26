@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { usePoolData } from '@/lib/usePoolData';
 import { Loading, PageHeader } from '@/app/page';
-import { snakePicker, totalPicks, isDraftComplete } from '@/lib/draft';
+import { snakePicker, totalPicks, isDraftComplete, activeParticipants } from '@/lib/draft';
 
 async function api(url, method, body) {
   const res = await fetch(url, {
@@ -191,10 +191,11 @@ function TournamentPicker({ settings, golfers, busy, run, flash }) {
 function DraftControls({ settings, participants, busy, run, flash }) {
   const status = settings?.status;
   const gpt = settings?.golfers_per_team ?? 6;
-  const complete = settings && isDraftComplete(settings, participants, gpt);
+  const active = activeParticipants(participants); // players sitting out are skipped
+  const complete = settings && isDraftComplete(settings, active, gpt);
   const onClock =
-    settings && !complete ? snakePicker(settings.current_pick, participants) : null;
-  const total = totalPicks(participants, gpt);
+    settings && !complete ? snakePicker(settings.current_pick, active) : null;
+  const total = totalPicks(active, gpt);
 
   const control = (action, confirmText) =>
     run(async () => {
@@ -275,6 +276,15 @@ function Participants({ participants, settings, busy, run, flash }) {
   const [justCreated, setJustCreated] = useState(null); // { name, code }
   const draftRunning = settings?.status === 'active' || settings?.status === 'paused';
 
+  // Split the roster: who's playing this tournament vs. sitting out (still in the
+  // pool, just benched). Both come ordered by draft_position from usePoolData.
+  const active = participants.filter((p) => !p.sitting_out);
+  const benched = participants.filter((p) => p.sitting_out);
+
+  // Sit a player out / bring them back. The server blocks this mid-draft.
+  const setSittingOut = (id, sitting_out) =>
+    run(() => api('/api/admin/participants', 'PATCH', { action: 'bench', id, sitting_out }));
+
   const loadCodes = useCallback(async () => {
     try {
       const r = await api('/api/admin/participants', 'GET');
@@ -322,9 +332,75 @@ function Participants({ participants, settings, busy, run, flash }) {
     );
   }
 
+  // One player row — used by both the active roster and the sitting-out bench.
+  // `i` is the index within the active list (for the up/down arrows); benched
+  // rows hide the arrows since their order doesn't matter.
+  const renderRow = (p, { isBenched = false } = {}) => (
+    <div
+      key={p.id}
+      className={`flex items-center gap-2 py-1.5 border-b border-masters-green-light/60 last:border-0 ${
+        isBenched ? 'opacity-70' : ''
+      }`}
+    >
+      <span className="w-6 text-center text-sm font-bold text-masters-green">
+        {isBenched ? '🪑' : p.draft_position}
+      </span>
+      <span className="flex-1 text-sm truncate">{p.display_name}</span>
+      {codes[p.id] ? (
+        <>
+          <button
+            onClick={() => copy(codes[p.id])}
+            title="Click to copy the code"
+            className="font-mono text-xs font-bold tracking-wider text-masters-green bg-masters-green-light/60 rounded px-2 py-1 hover:bg-masters-green-light"
+          >
+            {codes[p.id]}
+          </button>
+          <button
+            onClick={() => copyInvite(p.display_name, codes[p.id])}
+            title="Copy an invite message to send this player"
+            className="btn-outline btn-sm"
+          >
+            ✉
+          </button>
+        </>
+      ) : (
+        <span className="chip bg-gray-100 text-gray-400">no code</span>
+      )}
+      <button
+        disabled={busy || draftRunning}
+        onClick={() => setSittingOut(p.id, !isBenched)}
+        title={
+          draftRunning
+            ? 'Finish or reset the draft to change who’s sitting out'
+            : isBenched
+              ? 'Bring this player back into the tournament'
+              : 'Sit this player out for this tournament (keeps them in the pool)'
+        }
+        className="btn-outline btn-sm whitespace-nowrap"
+      >
+        {isBenched ? '↩ Bring back' : '🪑 Sit out'}
+      </button>
+      <button
+        disabled={busy}
+        onClick={() =>
+          run(async () => {
+            if (!window.confirm(`Remove ${p.display_name}? Their login code will stop working.`))
+              return;
+            await api(`/api/admin/participants?id=${p.id}`, 'DELETE');
+          })
+        }
+        className="btn-danger btn-sm"
+      >
+        ✕
+      </button>
+    </div>
+  );
+
   return (
     <div className="card">
-      <div className="card-title">Players ({participants.length})</div>
+      <div className="card-title">
+        Players ({active.length} active{benched.length ? ` · ${benched.length} sitting out` : ''})
+      </div>
 
       {justCreated && (
         <div className="bg-masters-green-light/70 border border-masters-green/20 rounded-lg p-3 mb-4">
@@ -356,69 +432,29 @@ function Participants({ participants, settings, busy, run, flash }) {
         </div>
       )}
 
-      <div className="space-y-1 mb-4">
-        {participants.map((p, i) => (
-          <div
-            key={p.id}
-            className="flex items-center gap-2 py-1.5 border-b border-masters-green-light/60 last:border-0"
-          >
-            <span className="w-6 text-center text-sm font-bold text-masters-green">
-              {p.draft_position}
-            </span>
-            <span className="flex-1 text-sm">{p.display_name}</span>
-            {codes[p.id] ? (
-              <>
-                <button
-                  onClick={() => copy(codes[p.id])}
-                  title="Click to copy the code"
-                  className="font-mono text-xs font-bold tracking-wider text-masters-green bg-masters-green-light/60 rounded px-2 py-1 hover:bg-masters-green-light"
-                >
-                  {codes[p.id]}
-                </button>
-                <button
-                  onClick={() => copyInvite(p.display_name, codes[p.id])}
-                  title="Copy an invite message to send this player"
-                  className="btn-outline btn-sm"
-                >
-                  ✉ Invite
-                </button>
-              </>
-            ) : (
-              <span className="chip bg-gray-100 text-gray-400">no code</span>
-            )}
-            <button
-              disabled={busy || i === 0}
-              onClick={() => run(() => api('/api/admin/participants', 'PATCH', { action: 'move', id: p.id, direction: 'up' }))}
-              className="btn-outline btn-sm"
-            >
-              ↑
-            </button>
-            <button
-              disabled={busy || i === participants.length - 1}
-              onClick={() => run(() => api('/api/admin/participants', 'PATCH', { action: 'move', id: p.id, direction: 'down' }))}
-              className="btn-outline btn-sm"
-            >
-              ↓
-            </button>
-            <button
-              disabled={busy}
-              onClick={() =>
-                run(async () => {
-                  if (!window.confirm(`Remove ${p.display_name}? Their login code will stop working.`))
-                    return;
-                  await api(`/api/admin/participants?id=${p.id}`, 'DELETE');
-                })
-              }
-              className="btn-danger btn-sm"
-            >
-              ✕
-            </button>
-          </div>
-        ))}
-        {participants.length === 0 && (
-          <p className="text-sm text-gray-400">No players yet. Add one below to generate a code.</p>
+      {/* Active roster — these players draft and score this tournament */}
+      <div className="space-y-1 mb-3">
+        {active.map((p) => renderRow(p))}
+        {active.length === 0 && (
+          <p className="text-sm text-gray-400">
+            {benched.length
+              ? 'No active players. Bring someone back below, or add a new player.'
+              : 'No players yet. Add one below to generate a code.'}
+          </p>
         )}
       </div>
+
+      {/* Sitting out — still in the pool, just skipped this tournament */}
+      {benched.length > 0 && (
+        <div className="mb-4">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">
+            Sitting out this tournament
+          </div>
+          <div className="space-y-1 rounded-lg bg-gray-50 border border-dashed border-gray-200 px-2">
+            {benched.map((p) => renderRow(p, { isBenched: true }))}
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2 items-end">
         <div className="flex-1 min-w-[160px]">
@@ -435,7 +471,7 @@ function Participants({ participants, settings, busy, run, flash }) {
           Add &amp; get code
         </button>
         <button
-          disabled={busy || draftRunning || participants.length < 2}
+          disabled={busy || draftRunning || active.length < 2}
           onClick={() =>
             run(() => api('/api/admin/participants', 'PATCH', { action: 'shuffle' }))
           }
@@ -447,7 +483,8 @@ function Participants({ participants, settings, busy, run, flash }) {
       </div>
       <p className="text-xs text-gray-400 mt-3">
         Each player logs in with their code at the sign-in screen — no email or password needed.
-        Click a code to copy it.
+        Click a code to copy it. <b>Sit out</b> benches a player for this tournament without
+        deleting them — bring them back anytime before the next draft.
       </p>
     </div>
   );

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { snakePicker, isDraftComplete, bestAvailableGolfer } from '@/lib/draft';
+import { snakePicker, isDraftComplete, bestAvailableGolfer, activeParticipants } from '@/lib/draft';
 import { advanceDraft } from '@/lib/draft-server';
 
 // Core "clock check". Idempotent: only auto-picks when the active pick clock has
@@ -16,10 +16,13 @@ async function runTick() {
       db.from('golfers').select('*'),
     ]);
 
+  // Players sitting out this tournament aren't in the snake order.
+  const active = activeParticipants(participants || []);
+
   if (!state || state.status !== 'active') {
     return { ok: true, advanced: false };
   }
-  if (isDraftComplete(state, participants || [], state.golfers_per_team)) {
+  if (isDraftComplete(state, active, state.golfers_per_team)) {
     await db.from('draft_state').update({ status: 'complete', pick_deadline: null }).eq('id', 1);
     return { ok: true, advanced: false, complete: true };
   }
@@ -30,7 +33,7 @@ async function runTick() {
     return { ok: true, advanced: false };
   }
 
-  const onClock = snakePicker(state.current_pick, participants || []);
+  const onClock = snakePicker(state.current_pick, active);
   const best = bestAvailableGolfer(golfers || [], picks || []);
   if (!onClock || !best) {
     return { ok: true, advanced: false };
@@ -46,7 +49,7 @@ async function runTick() {
     return { ok: true, advanced: false };
   }
 
-  const result = await advanceDraft(db, state, participants || []);
+  const result = await advanceDraft(db, state, active);
   return {
     ok: true,
     advanced: true,

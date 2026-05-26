@@ -76,6 +76,10 @@ create table public.participants (
   user_id       uuid references public.profiles(id) on delete set null,
   display_name  text not null,
   draft_position int not null,
+  -- "Sitting out" this tournament: the player stays in the pool (account, code,
+  -- and season membership persist) but is skipped for the current tournament's
+  -- draft, standings, and live feed. Toggled by the admin between tournaments.
+  sitting_out   boolean not null default false,
   created_at    timestamptz not null default now()
 );
 create unique index participants_position_idx on public.participants (draft_position);

@@ -7,11 +7,12 @@ import { adjustedTotal, scoreText, scoreColor, liveRoundIndex } from '@/lib/scor
 import { teamColor } from '@/lib/teamColors';
 import PlayerScorecard from '@/components/PlayerScorecard';
 import LiveStatus from '@/components/LiveStatus';
+import SittingOutNotice from '@/components/SittingOutNotice';
 
 const FILTERS = ['all', 'drafted'];
 
 export default function FieldPage() {
-  const { loading, settings, golfers, picks, participants } = usePoolData();
+  const { loading, user, settings, golfers, picks, participants } = usePoolData();
   const [live, setLive] = useState({ rows: {}, status: 'idle', updatedAt: null, cut: null });
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -175,6 +176,12 @@ export default function FieldPage() {
         action={
           <LiveStatus status={live.status} updatedAt={live.updatedAt} onRefresh={loadLive} />
         }
+      />
+
+      <SittingOutNotice
+        participants={participants}
+        userId={user?.id}
+        tournament={settings?.tournament_name}
       />
 
       <div className="flex gap-2 mb-4 flex-wrap items-center">
