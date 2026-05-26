@@ -277,7 +277,7 @@ export default function DraftPage() {
       {status === 'active' && !complete && onClock && (
         <div
           className={`card mb-5 flex items-center justify-between ${
-            isMyTurn ? 'bg-masters-gold-pale border-2 border-masters-gold animate-turn' : ''
+            isMyTurn ? 'bg-masters-gold-pale border-2 border-masters-gold animate-your-pick' : ''
           }`}
         >
           <div className="min-w-0">
@@ -286,11 +286,11 @@ export default function DraftPage() {
               {Math.floor(draftState.current_pick / Math.max(activeParts.length, 1)) + 1}
             </div>
             {isMyTurn ? (
-              <div className="flex items-center gap-2 mt-1">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-masters-gold text-masters-green text-xs font-extrabold uppercase tracking-wider animate-pulse">
-                  <span className="w-2 h-2 rounded-full bg-masters-green" /> Your turn
+              <div className="flex flex-wrap items-center gap-2.5 mt-1.5">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-masters-gold text-masters-green text-xs font-extrabold uppercase tracking-widest animate-pulse">
+                  <span className="w-2 h-2 rounded-full bg-masters-green" /> Your Pick
                 </span>
-                <span className="font-serif text-xl text-masters-green hidden sm:inline">
+                <span className="font-serif text-2xl font-bold text-masters-green leading-none">
                   You&apos;re on the clock!
                 </span>
               </div>
@@ -376,7 +376,8 @@ export default function DraftPage() {
                 : 'No world ranking for this field yet — refresh the field in Admin.'}
             </p>
           )}
-          <div className="max-h-[460px] overflow-y-auto -mx-1 px-1">
+          {/* ~6 golfers visible; scroll for the rest. */}
+          <div className="max-h-[264px] overflow-y-auto -mx-1 px-1">
             {available.map((g) => {
               const canPick =
                 status === 'active' && !complete && (isMyTurn || profile?.is_admin);
@@ -401,7 +402,7 @@ export default function DraftPage() {
                     <button
                       disabled={picking}
                       onClick={() => draftGolfer(g.id)}
-                      className="btn-gold btn-sm"
+                      className={`btn-gold btn-sm ${isMyTurn ? 'animate-draft' : ''}`}
                     >
                       Draft
                     </button>
@@ -423,7 +424,7 @@ export default function DraftPage() {
               🪑 Sitting out: {sittingOut.map((p) => p.display_name).join(', ')}
             </p>
           )}
-          <div className="max-h-[520px] overflow-y-auto -mx-1">
+          <div className="-mx-1">
             {activeParts.length === 0 && (
               <p className="text-sm text-gray-400 px-1">No active players yet.</p>
             )}
@@ -435,13 +436,10 @@ export default function DraftPage() {
                 .filter((pk) => pk.participant_id === p.id)
                 .map((pk) => golfers.find((g) => g.id === pk.golfer_id))
                 .filter(Boolean);
-              // Full names on one line; the row truncates rather than wrapping,
-              // so each team stays a single thin line on a phone.
-              const names = roster.map((g) => g.name).join(' · ');
               return (
                 <div
                   key={p.id}
-                  className={`flex items-center gap-2 border-l-4 ${c.borderL} border-b border-masters-green-light/60 last:border-b-0 px-2 py-1.5 ${
+                  className={`border-l-4 ${c.borderL} border-b border-masters-green-light/60 last:border-b-0 px-2 py-2 ${
                     isOnClock && isMe
                       ? 'bg-masters-gold-pale animate-turn'
                       : isOnClock
@@ -449,23 +447,46 @@ export default function DraftPage() {
                         : ''
                   }`}
                 >
-                  <span className={`w-2 h-2 rounded-full shrink-0 ${c.dot}`} />
-                  <span className="text-[11px] text-gray-400 shrink-0 tabular-nums w-3 text-right">
-                    {p.draft_position}
-                  </span>
-                  <span className={`text-sm font-semibold shrink-0 ${c.text}`}>{p.display_name}</span>
-                  {isMe && <span className="text-[9px] font-bold uppercase text-masters-gold shrink-0">you</span>}
-                  {isOnClock && (
-                    <span className="text-[9px] font-bold uppercase text-masters-green animate-pulse shrink-0">
-                      picking
+                  {/* Team header */}
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${c.dot}`} />
+                    <span className="text-[11px] text-gray-400 shrink-0 tabular-nums w-3 text-right">
+                      {p.draft_position}
                     </span>
-                  )}
-                  <span className="flex-1 min-w-0 truncate text-xs text-gray-500">
-                    {names || <span className="text-gray-300">no picks yet</span>}
-                  </span>
-                  <span className="text-[11px] text-gray-400 shrink-0 tabular-nums">
-                    {roster.length}/{gpt}
-                  </span>
+                    <span className={`text-sm font-semibold ${c.text}`}>{p.display_name}</span>
+                    {isMe && <span className="text-[9px] font-bold uppercase text-masters-gold shrink-0">you</span>}
+                    {isOnClock && (
+                      <span className="text-[9px] font-bold uppercase text-masters-green animate-pulse shrink-0">
+                        picking
+                      </span>
+                    )}
+                    <span className="ml-auto text-[11px] text-gray-400 shrink-0 tabular-nums">
+                      {roster.length}/{gpt}
+                    </span>
+                  </div>
+                  {/* Aligned grid of pick boxes — one slot per roster spot, so the
+                      full roster shows and teams line up even in the last round. */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 mt-1.5">
+                    {Array.from({ length: gpt }).map((_, i) => {
+                      const g = roster[i];
+                      return g ? (
+                        <span
+                          key={i}
+                          title={g.name}
+                          className={`rounded-md px-2 py-1 text-xs font-medium truncate ${c.bg} ${c.text}`}
+                        >
+                          {g.name}
+                        </span>
+                      ) : (
+                        <span
+                          key={i}
+                          className="rounded-md px-2 py-1 text-xs text-center text-gray-300 border border-dashed border-gray-200"
+                        >
+                          —
+                        </span>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             })}

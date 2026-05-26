@@ -163,3 +163,46 @@
     animation: none;
   }
 }
+
+/* "It's your pick" banner — an elegant gold breathing glow + expanding ring, so
+   it's unmistakable when the clock is on YOU (and only you). */
+@keyframes yourPick {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(201, 168, 76, 0.55),
+      0 6px 22px rgba(201, 168, 76, 0.18);
+  }
+  70% {
+    box-shadow:
+      0 0 0 12px rgba(201, 168, 76, 0),
+      0 6px 26px rgba(201, 168, 76, 0.32);
+  }
+}
+.animate-your-pick {
+  animation: yourPick 1.7s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-your-pick {
+    animation: none;
+  }
+}
+
+/* Draft buttons pulse a small gold ring while it's your turn to pick. */
+@keyframes draftPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(201, 168, 76, 0.65);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(201, 168, 76, 0);
+  }
+}
+.animate-draft {
+  animation: draftPulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-draft {
+    animation: none;
+  }
+}
