@@ -23,7 +23,6 @@ export default function DraftPage() {
   const [now, setNow] = useState(Date.now());
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('fav'); // 'fav' (world ranking) | 'name'
-  const [tier, setTier] = useState(0); // 0 = whole field; else max world rank (10/25/50)
   const [picking, setPicking] = useState(false);
   const [error, setError] = useState('');
   const [pickReveal, setPickReveal] = useState(null); // { name, team, seed, mine, athleteId }
@@ -206,9 +205,7 @@ export default function DraftPage() {
     const q = search.trim().toLowerCase();
     const list = golfers
       .filter((g) => !takenIds.has(g.id))
-      .filter((g) => g.name.toLowerCase().includes(q))
-      // Tier = "favorites" buckets by world ranking (unranked never make the cut).
-      .filter((g) => (tier ? g.rank != null && g.rank <= tier : true));
+      .filter((g) => g.name.toLowerCase().includes(q));
     if (sortBy === 'name') {
       return [...list].sort((a, b) => a.name.localeCompare(b.name));
     }
@@ -218,7 +215,7 @@ export default function DraftPage() {
       const rb = b.rank ?? Infinity;
       return ra === rb ? a.name.localeCompare(b.name) : ra - rb;
     });
-  }, [golfers, takenIds, search, sortBy, tier]);
+  }, [golfers, takenIds, search, sortBy]);
 
   // How many of the remaining field are world-ranked — tells us whether the
   // "Favorites" ordering is meaningful or the event simply has no ranking data.
@@ -333,7 +330,7 @@ export default function DraftPage() {
       {!complete && (
       <div className="flex flex-col gap-5">
         {/* ── Available golfers ───────────────────────────────────── */}
-        <div className="card order-2">
+        <div className="card order-1">
           <div className="card-title">Available Golfers ({available.length})</div>
           {(isMyTurn || profile?.is_admin) && status === 'active' && !complete ? (
             <p className="text-xs text-masters-green-mid mb-3">
@@ -345,27 +342,9 @@ export default function DraftPage() {
               <p className="text-xs text-gray-400 mb-3">Waiting for your turn…</p>
             )
           )}
-          {/* Favorites filter (by world ranking) + sort + search ─────────── */}
-          <div className="flex flex-wrap items-center gap-1.5 mb-2">
-            {[
-              { v: 0, label: 'All' },
-              { v: 10, label: 'Top 10' },
-              { v: 25, label: 'Top 25' },
-              { v: 50, label: 'Top 50' },
-            ].map((t) => (
-              <button
-                key={t.v}
-                onClick={() => setTier(t.v)}
-                className={`px-2.5 py-1 rounded-full text-xs font-semibold transition ${
-                  tier === t.v
-                    ? 'bg-masters-green text-white'
-                    : 'bg-masters-green-light/40 text-masters-green-mid hover:bg-masters-green-light'
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-            <div className="ml-auto inline-flex rounded-full bg-masters-green-light/40 p-0.5 text-xs font-semibold">
+          {/* Sort (favorites by world ranking, or A–Z) + search ─────────── */}
+          <div className="flex items-center justify-end mb-2">
+            <div className="inline-flex rounded-full bg-masters-green-light/40 p-0.5 text-xs font-semibold">
               {[
                 { v: 'fav', label: 'Favorites' },
                 { v: 'name', label: 'A–Z' },
@@ -437,16 +416,16 @@ export default function DraftPage() {
         </div>
 
         {/* ── Draft board / pick log ──────────────────────────────── */}
-        <div className="card order-1">
+        <div className="card order-2">
           <div className="card-title">Draft Board</div>
           {sittingOut.length > 0 && (
             <p className="text-xs text-gray-400 mb-2">
               🪑 Sitting out: {sittingOut.map((p) => p.display_name).join(', ')}
             </p>
           )}
-          <div className="max-h-[520px] overflow-y-auto -mx-1 px-1 space-y-2.5">
+          <div className="max-h-[520px] overflow-y-auto -mx-1">
             {activeParts.length === 0 && (
-              <p className="text-sm text-gray-400">No active players yet.</p>
+              <p className="text-sm text-gray-400 px-1">No active players yet.</p>
             )}
             {activeParts.map((p) => {
               const c = teamColor(p.draft_position);
@@ -456,50 +435,37 @@ export default function DraftPage() {
                 .filter((pk) => pk.participant_id === p.id)
                 .map((pk) => golfers.find((g) => g.id === pk.golfer_id))
                 .filter(Boolean);
+              // Full names on one line; the row truncates rather than wrapping,
+              // so each team stays a single thin line on a phone.
+              const names = roster.map((g) => g.name).join(' · ');
               return (
                 <div
                   key={p.id}
-                  className={`rounded-xl bg-white border border-masters-green-light border-l-4 ${c.borderL} px-3 py-2.5 transition ${
+                  className={`flex items-center gap-2 border-l-4 ${c.borderL} border-b border-masters-green-light/60 last:border-b-0 px-2 py-1.5 ${
                     isOnClock && isMe
                       ? 'bg-masters-gold-pale animate-turn'
                       : isOnClock
-                        ? 'bg-masters-gold-pale ring-1 ring-masters-gold'
+                        ? 'bg-masters-gold-pale ring-1 ring-inset ring-masters-gold'
                         : ''
                   }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-sm flex items-center gap-1.5 min-w-0">
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${c.dot}`} />
-                      <span className="text-gray-400">{p.draft_position}.</span>
-                      <span className={`truncate ${c.text}`}>{p.display_name}</span>
-                      {isMe && (
-                        <span className="chip bg-masters-gold-light text-masters-green">you</span>
-                      )}
-                      {isOnClock && (
-                        <span className="chip bg-masters-gold text-masters-green animate-pulse">
-                          picking
-                        </span>
-                      )}
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${c.dot}`} />
+                  <span className="text-[11px] text-gray-400 shrink-0 tabular-nums w-3 text-right">
+                    {p.draft_position}
+                  </span>
+                  <span className={`text-sm font-semibold shrink-0 ${c.text}`}>{p.display_name}</span>
+                  {isMe && <span className="text-[9px] font-bold uppercase text-masters-gold shrink-0">you</span>}
+                  {isOnClock && (
+                    <span className="text-[9px] font-bold uppercase text-masters-green animate-pulse shrink-0">
+                      picking
                     </span>
-                    <span className="text-xs text-gray-400 shrink-0">
-                      {roster.length}/{gpt}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {roster.map((g) => (
-                      <span key={g.id} className={`chip ${c.bg} ${c.text}`}>
-                        {g.name}
-                      </span>
-                    ))}
-                    {Array.from({ length: Math.max(0, gpt - roster.length) }).map((_, i) => (
-                      <span
-                        key={i}
-                        className="chip bg-gray-50 text-gray-300 border border-dashed border-gray-200"
-                      >
-                        empty
-                      </span>
-                    ))}
-                  </div>
+                  )}
+                  <span className="flex-1 min-w-0 truncate text-xs text-gray-500">
+                    {names || <span className="text-gray-300">no picks yet</span>}
+                  </span>
+                  <span className="text-[11px] text-gray-400 shrink-0 tabular-nums">
+                    {roster.length}/{gpt}
+                  </span>
                 </div>
               );
             })}
