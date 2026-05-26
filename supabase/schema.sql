@@ -43,6 +43,13 @@ create table public.draft_state (
   pick_timer_seconds       int not null default 0,            -- 0 = no timer (admin can set one)
   tournament_name          text not null default 'The Masters',
   event_id                 text,                              -- ESPN event id the pool is set to (null = follow current)
+  -- Pre-tournament purse log (the pot for the active tournament). Editable by the
+  -- admin until the tournament is closed; snapshotted into `tournaments` on close.
+  buy_in                   numeric not null default 0,        -- entry fee per patron
+  paid_count               int not null default 0,            -- patrons entered (paid)
+  payout_structure         text not null default 'winner_take_all',
+  purse_notes              text,
+  closed_at                timestamptz,                       -- set when added to The Gallery (blocks re-closing)
   updated_at               timestamptz not null default now()
 );
 
@@ -98,6 +105,36 @@ create unique index picks_golfer_idx       on public.picks (golfer_id);   -- a g
 create unique index picks_pick_number_idx  on public.picks (pick_number);
 
 -- ---------------------------------------------------------------------------
+-- tournaments — "The Gallery": a permanent snapshot of each completed
+-- tournament. Written once when the admin closes a tournament; never edited by
+-- the client. The full final standings (per team + per drafted golfer) live in
+-- `standings` jsonb so career stats survive even if golfers/picks are cleared
+-- for the next tournament. Career earnings / wins / made-cut rate are computed
+-- by aggregating these rows.
+-- ---------------------------------------------------------------------------
+create table public.tournaments (
+  id                      uuid primary key default gen_random_uuid(),
+  event_id                text,
+  name                    text not null,
+  completed_at            timestamptz not null default now(),
+  course_par              int,
+  counting_scores         int,
+  golfers_per_team        int,
+  buy_in                  numeric not null default 0,
+  paid_count              int not null default 0,
+  purse                   numeric not null default 0,
+  payout_structure        text not null default 'winner_take_all',
+  notes                   text,
+  champion_participant_id uuid,        -- nullable: the team may be removed later
+  champion_name           text,
+  -- [{ participant_id, name, position, score, winnings,
+  --    golfers: [{ name, status, made_cut, total, counted }] }]
+  standings               jsonb not null default '[]'::jsonb,
+  created_at              timestamptz not null default now()
+);
+create index tournaments_completed_idx on public.tournaments (completed_at desc);
+
+-- ---------------------------------------------------------------------------
 -- New-user trigger: create a profile, first signup becomes admin
 -- ---------------------------------------------------------------------------
 create function public.handle_new_user()
@@ -136,6 +173,7 @@ alter table public.draft_state  enable row level security;
 alter table public.golfers      enable row level security;
 alter table public.participants enable row level security;
 alter table public.picks        enable row level security;
+alter table public.tournaments  enable row level security;
 
 create policy "profiles readable by authenticated"
   on public.profiles for select to authenticated using (true);
@@ -152,6 +190,8 @@ create policy "participants readable by authenticated"
   on public.participants for select to authenticated using (true);
 create policy "picks readable by authenticated"
   on public.picks for select to authenticated using (true);
+create policy "tournaments readable by authenticated"
+  on public.tournaments for select to authenticated using (true);
 
 -- ---------------------------------------------------------------------------
 -- Realtime — broadcast changes so the draft board / leaderboard live-update
@@ -160,6 +200,7 @@ alter publication supabase_realtime add table public.draft_state;
 alter publication supabase_realtime add table public.picks;
 alter publication supabase_realtime add table public.participants;
 alter publication supabase_realtime add table public.golfers;
+alter publication supabase_realtime add table public.tournaments;
 
 -- ============================================================================
 --  Tips

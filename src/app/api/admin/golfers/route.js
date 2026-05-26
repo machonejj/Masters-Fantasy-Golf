@@ -64,6 +64,12 @@ export async function POST(request) {
         paused_remaining_seconds: null,
         tournament_name: board.tournament || 'Tournament',
         course_par: board.coursePar || 72,
+        // Fresh purse log for the new tournament; clear the "added to Gallery" lock.
+        buy_in: 0,
+        paid_count: 0,
+        payout_structure: 'winner_take_all',
+        purse_notes: null,
+        closed_at: null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', 1);

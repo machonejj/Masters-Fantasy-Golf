@@ -5,7 +5,15 @@ import { usePoolData } from '@/lib/usePoolData';
 import { useLiveScores, mergeLive } from '@/lib/useLiveScores';
 import { Loading, PageHeader } from '@/app/page';
 import { snakePicker, totalPicks, isDraftComplete, activeParticipants } from '@/lib/draft';
+import { teamData } from '@/lib/scoring';
 import { teamColor } from '@/lib/teamColors';
+import {
+  computePurse,
+  payoutStructure,
+  PAYOUT_STRUCTURES,
+  formatMoney,
+  madeCut,
+} from '@/lib/gallery';
 
 async function api(url, method, body) {
   const res = await fetch(url, {
@@ -67,6 +75,15 @@ export default function AdminPage() {
       )}
 
       <TournamentPicker settings={settings} golfers={golfers} busy={busy} run={run} flash={flash} />
+      <PurseLog
+        settings={settings}
+        participants={participants}
+        golfers={golfers}
+        picks={picks}
+        busy={busy}
+        run={run}
+        flash={flash}
+      />
       <DraftControls
         settings={settings}
         participants={participants}
@@ -193,6 +210,208 @@ function TournamentPicker({ settings, golfers, busy, run, flash }) {
             golfers until ESPN posts the field — use “Refresh field” as it gets closer.
           </p>
         </>
+      )}
+    </div>
+  );
+}
+
+/* ── Purse log + close (The Gallery) ─────────────────────────── */
+// Pre-tournament: enter the entry fee + patrons to set the purse and payout.
+// Post-draft: "Close Tournament & Add to Gallery" snapshots the final standings.
+function PurseLog({ settings, participants, golfers, picks, busy, run, flash }) {
+  const { live } = useLiveScores();
+  const [form, setForm] = useState(null);
+  const closed = !!settings?.closed_at;
+
+  useEffect(() => {
+    if (settings && !form) {
+      setForm({
+        buy_in: settings.buy_in ?? 0,
+        paid_count: settings.paid_count ?? 0,
+        payout_structure: settings.payout_structure ?? 'winner_take_all',
+        purse_notes: settings.purse_notes ?? '',
+      });
+    }
+  }, [settings, form]);
+
+  const purse = computePurse(form?.buy_in, form?.paid_count);
+  const champShare = purse * (payoutStructure(form?.payout_structure).shares[0] || 1);
+  const wta = form?.payout_structure === 'winner_take_all';
+
+  const statusLabel =
+    settings?.status === 'complete'
+      ? closed
+        ? 'Final · in The Gallery'
+        : 'Final'
+      : settings?.status === 'active'
+        ? 'Draft underway'
+        : settings?.status === 'paused'
+          ? 'Draft paused'
+          : 'Draft pending';
+
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  function savePurse() {
+    run(async () => {
+      await api('/api/draft/control', 'POST', {
+        action: 'settings',
+        settings: {
+          buy_in: Number(form.buy_in) || 0,
+          paid_count: Number(form.paid_count) || 0,
+          payout_structure: form.payout_structure,
+          purse_notes: form.purse_notes?.trim() || null,
+        },
+      });
+      flash('ok', 'Purse saved.');
+    });
+  }
+
+  // Final standings, computed exactly like the leaderboard (live-merged scores +
+  // per-golfer final status), to snapshot into The Gallery on close.
+  function buildStandings() {
+    const merged = golfers.map((g) => mergeLive(g, live));
+    return activeParticipants(participants).map((p) => {
+      const td = teamData(p.id, picks, merged, settings);
+      return {
+        participant_id: p.id,
+        name: p.display_name,
+        score: td.teamScore,
+        golfers: td.withScores.map(({ g, score }) => ({
+          name: g.name,
+          status: g.status,
+          made_cut: madeCut(g.status),
+          total: score,
+          counted: td.countingSet.has(g.id),
+        })),
+      };
+    });
+  }
+
+  function closeTournament() {
+    const standings = buildStandings();
+    if (!standings.length || standings.every((t) => t.golfers.length === 0)) {
+      flash('error', 'No drafted teams to record yet.');
+      return;
+    }
+    const incomplete = standings.some((t) => t.score === null);
+    const msg =
+      `Close “${settings?.tournament_name}” and enshrine it in The Gallery?\n\n` +
+      `This records the Final Leaderboard, awards the ${formatMoney(purse)} purse, and locks the result.` +
+      (incomplete ? '\n\n⚠ Some teams have no score yet — the standings may be incomplete.' : '');
+    run(async () => {
+      if (!window.confirm(msg)) return;
+      const r = await api('/api/admin/close-tournament', 'POST', { standings });
+      flash('ok', `Enshrined in The Gallery — Champion: ${r.champion || '—'} (${formatMoney(r.purse)}).`);
+    });
+  }
+
+  if (!form) return null;
+
+  return (
+    <div className="card">
+      <div className="card-title">Tournament Purse</div>
+
+      {/* Active tournament card */}
+      <div className="rounded-xl bg-masters-green text-white p-4 mb-4">
+        <div className="font-serif text-lg leading-tight">{settings?.tournament_name || '—'}</div>
+        <div className="text-[11px] uppercase tracking-wider text-white/60 mt-0.5">
+          {statusLabel} · {golfers.length} in the field
+        </div>
+        <div className="mt-3 flex items-end justify-between gap-3">
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-white/60">
+              {wta ? 'Winner-Take-All Purse' : 'Tournament Purse'}
+            </div>
+            <div className="font-serif text-3xl text-masters-gold leading-none mt-1">
+              {formatMoney(purse)}
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-[10px] uppercase tracking-wider text-white/60">Champion’s Share</div>
+            <div className="font-serif text-xl leading-none mt-1">{formatMoney(champShare)}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Purse log fields */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="label">Entry Fee</label>
+          <input
+            type="number"
+            min="0"
+            className="input"
+            disabled={closed}
+            value={form.buy_in}
+            onChange={(e) => set('buy_in', e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="label">Patrons Entered</label>
+          <input
+            type="number"
+            min="0"
+            className="input"
+            disabled={closed}
+            value={form.paid_count}
+            onChange={(e) => set('paid_count', e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="label">Payout</label>
+          <select
+            className="input"
+            disabled={closed}
+            value={form.payout_structure}
+            onChange={(e) => set('payout_structure', e.target.value)}
+          >
+            {PAYOUT_STRUCTURES.map((s) => (
+              <option key={s.key} value={s.key}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-end text-xs text-gray-500">
+          {form.paid_count || 0} patrons × {formatMoney(form.buy_in || 0)} ={' '}
+          <b className="ml-1 text-masters-green">{formatMoney(purse)}</b>
+        </div>
+        <div className="col-span-2">
+          <label className="label">Notes (optional)</label>
+          <input
+            className="input"
+            disabled={closed}
+            placeholder="e.g. side bets, special rules…"
+            value={form.purse_notes}
+            onChange={(e) => set('purse_notes', e.target.value)}
+          />
+        </div>
+      </div>
+
+      {!closed && (
+        <div className="flex flex-wrap gap-2 mt-4">
+          <button disabled={busy} onClick={savePurse} className="btn-primary">
+            Save purse
+          </button>
+          {settings?.status === 'complete' && (
+            <button disabled={busy} onClick={closeTournament} className="btn-gold">
+              🏆 Close Tournament &amp; Add to Gallery
+            </button>
+          )}
+        </div>
+      )}
+
+      {closed && (
+        <p className="text-xs text-masters-green-mid mt-4">
+          ✓ This tournament is enshrined in The Gallery. Set up a new tournament to start the next
+          one — the purse log resets automatically.
+        </p>
+      )}
+      {!closed && settings?.status !== 'complete' && (
+        <p className="text-xs text-gray-400 mt-3">
+          Set the entry fee and patrons now; the “Close Tournament” option appears once the draft is
+          complete.
+        </p>
       )}
     </div>
   );

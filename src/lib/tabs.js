@@ -6,6 +6,7 @@ export const TABS = [
   { href: '/golfers', label: 'The Field' },
   { href: '/feed', label: 'Live Feed' },
   { href: '/draft', label: 'Draft Room' },
+  { href: '/gallery', label: 'The Gallery' },
 ];
 
 export const ADMIN_TAB = { href: '/admin', label: 'Admin' };

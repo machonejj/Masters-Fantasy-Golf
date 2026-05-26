@@ -130,6 +130,11 @@ export async function POST(request) {
         'course_par',
         'pick_timer_seconds',
         'tournament_name',
+        // Pre-tournament purse log
+        'buy_in',
+        'paid_count',
+        'payout_structure',
+        'purse_notes',
       ];
       const patch = { updated_at: new Date().toISOString() };
       for (const k of allowed) {
