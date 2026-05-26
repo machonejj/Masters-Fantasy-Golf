@@ -1,9 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePoolData } from '@/lib/usePoolData';
+import { useLiveScores, mergeLive } from '@/lib/useLiveScores';
 import { Loading, PageHeader } from '@/app/page';
 import { snakePicker, totalPicks, isDraftComplete, activeParticipants } from '@/lib/draft';
+import { teamColor } from '@/lib/teamColors';
 
 async function api(url, method, body) {
   const res = await fetch(url, {
@@ -17,7 +19,7 @@ async function api(url, method, body) {
 }
 
 export default function AdminPage() {
-  const { loading, profile, settings, participants, golfers, refresh } =
+  const { loading, profile, settings, participants, golfers, picks, refresh } =
     usePoolData({ pollMs: 10000 });
   const [msg, setMsg] = useState(null); // {type, text}
   const [busy, setBusy] = useState(false);
@@ -68,6 +70,15 @@ export default function AdminPage() {
       <DraftControls
         settings={settings}
         participants={participants}
+        busy={busy}
+        run={run}
+        flash={flash}
+      />
+      <Replacements
+        settings={settings}
+        participants={participants}
+        golfers={golfers}
+        picks={picks}
         busy={busy}
         run={run}
         flash={flash}
@@ -265,6 +276,144 @@ function DraftControls({ settings, participants, busy, run, flash }) {
           ? `Each pick has a ${Math.round(settings.pick_timer_seconds / 60)}-minute clock; on timeout the best available golfer is auto-drafted.`
           : 'No pick timer — picks have unlimited time. Set one in Pool Settings if you want a clock.'}
       </p>
+    </div>
+  );
+}
+
+/* ── Replacements (post-draft withdrawals) ───────────────────── */
+// After the draft, if a golfer withdraws (WD), let the admin swap them for an
+// undrafted, still-active golfer — same roster slot, no re-draft. Only WD
+// golfers get a Replace button (a missed cut is part of the game, not replaced).
+function Replacements({ settings, participants, golfers, picks, busy, run, flash }) {
+  const { live } = useLiveScores();
+  const [replacing, setReplacing] = useState(null); // { pickId, golferName, teamName }
+  const [search, setSearch] = useState('');
+
+  // Merge live ESPN status so WD detection matches the standings.
+  const merged = useMemo(() => golfers.map((g) => mergeLive(g, live)), [golfers, live]);
+  const byId = useMemo(() => new Map(merged.map((g) => [g.id, g])), [merged]);
+  const takenIds = useMemo(() => new Set(picks.map((p) => p.golfer_id)), [picks]);
+
+  // Replacement pool: undrafted + still active, favorites (world-ranking) first.
+  const available = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return merged
+      .filter((g) => !takenIds.has(g.id) && g.status === 'active' && g.name.toLowerCase().includes(q))
+      .sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity) || a.name.localeCompare(b.name));
+  }, [merged, takenIds, search]);
+
+  const teams = activeParticipants(participants);
+  const anyWd = picks.some((pk) => byId.get(pk.golfer_id)?.status === 'wd');
+
+  // Only relevant once the draft is done.
+  if (settings?.status !== 'complete') return null;
+
+  function pick(newGolferId) {
+    run(async () => {
+      await api('/api/admin/picks', 'POST', { pickId: replacing.pickId, newGolferId });
+      flash('ok', `Replaced ${replacing.golferName}.`);
+      setReplacing(null);
+      setSearch('');
+    });
+  }
+
+  return (
+    <div className="card">
+      <div className="card-title">Replace a withdrawn golfer</div>
+      <p className="text-xs text-gray-400 mb-3">
+        If a golfer <b>withdraws (WD)</b> after the draft, swap them for an available golfer — same
+        roster spot, no re-draft. Their replacement&apos;s already-played rounds will count.
+        {!anyWd && ' No withdrawals right now.'}
+      </p>
+      <div className="space-y-3">
+        {teams.map((p) => {
+          const roster = picks
+            .filter((pk) => pk.participant_id === p.id)
+            .map((pk) => ({ pk, g: byId.get(pk.golfer_id) }))
+            .filter((x) => x.g);
+          const c = teamColor(p.draft_position);
+          return (
+            <div key={p.id}>
+              <div className="text-xs font-semibold mb-1" style={{ color: c.hex || undefined }}>
+                {p.display_name}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {roster.map(({ pk, g }) => {
+                  const wd = g.status === 'wd';
+                  return (
+                    <span
+                      key={pk.id}
+                      className={`chip ${wd ? 'bg-red-100 text-red-800' : 'bg-masters-green-light text-masters-green'}`}
+                    >
+                      {g.name}
+                      {wd && ' (WD)'}
+                      {wd && (
+                        <button
+                          disabled={busy}
+                          onClick={() => {
+                            setReplacing({ pickId: pk.id, golferName: g.name, teamName: p.display_name });
+                            setSearch('');
+                          }}
+                          className="ml-1.5 underline font-bold"
+                        >
+                          Replace
+                        </button>
+                      )}
+                    </span>
+                  );
+                })}
+                {roster.length === 0 && <span className="text-xs text-gray-400">No golfers.</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {replacing && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/45 px-6"
+          onClick={() => setReplacing(null)}
+        >
+          <div
+            className="bg-white rounded-xl p-4 w-full max-w-md max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="card-title">Replace {replacing.golferName}</div>
+            <p className="text-xs text-gray-500 mb-2">
+              {replacing.teamName} · pick an available active golfer
+            </p>
+            <input
+              className="input mb-2"
+              placeholder="Search golfers…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              autoFocus
+            />
+            <div className="overflow-y-auto -mx-1 px-1">
+              {available.map((g) => (
+                <div
+                  key={g.id}
+                  className="flex items-center justify-between py-1.5 border-b border-masters-green-light/60 last:border-0"
+                >
+                  <span className="text-sm">
+                    <span className="text-xs text-gray-400 mr-2">#{g.rank ?? '–'}</span>
+                    {g.name}
+                  </span>
+                  <button disabled={busy} onClick={() => pick(g.id)} className="btn-gold btn-sm">
+                    Pick
+                  </button>
+                </div>
+              ))}
+              {available.length === 0 && (
+                <p className="text-sm text-gray-400 py-4 text-center">No available active golfers.</p>
+              )}
+            </div>
+            <button onClick={() => setReplacing(null)} className="btn-outline btn-sm mt-3 self-end">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

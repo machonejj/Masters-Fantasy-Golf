@@ -2,8 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useSyncExternalStore } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { navTabs } from '@/lib/tabs';
+import {
+  subscribeSwipeProgress,
+  getSwipeProgress,
+  clearSwipeProgress,
+  INITIAL,
+} from '@/lib/swipeProgress';
 
 export default function NavBar({ profile }) {
   const pathname = usePathname();
@@ -11,6 +18,23 @@ export default function NavBar({ profile }) {
   const supabase = createClient();
 
   const tabs = navTabs(profile?.is_admin);
+
+  // Which tab the URL says we're on.
+  const activeIndex =
+    pathname === '/'
+      ? 0
+      : Math.max(
+          0,
+          tabs.findIndex((t) => t.href !== '/' && pathname.startsWith(t.href))
+        );
+
+  // During a swipe, the highlight rides between tabs; otherwise it sits on the
+  // active one. Clear the live progress once a navigation lands.
+  const swipe = useSyncExternalStore(subscribeSwipeProgress, getSwipeProgress, () => INITIAL);
+  const effIndex = swipe.active ? swipe.from + (swipe.to - swipe.from) * swipe.progress : activeIndex;
+  useEffect(() => {
+    clearSwipeProgress();
+  }, [pathname]);
 
   async function signOut() {
     try {
@@ -46,25 +70,36 @@ export default function NavBar({ profile }) {
           </div>
         </div>
 
-        {/* Tabs — evenly fill the width so they fit any screen */}
-        <div className="flex border-t border-white/10">
-          {tabs.map((t) => {
-            const active =
-              t.href === '/' ? pathname === '/' : pathname.startsWith(t.href);
+        {/* Tabs — evenly fill the width so they fit any screen. A single
+            underline slides between tabs (and rides the swipe live). */}
+        <div className="relative flex border-t border-white/10">
+          {tabs.map((t, i) => {
+            // 1 when the highlight is fully on this tab, fading to 0 a tab away —
+            // so the "white" crossfades from one tab to the next during a swipe.
+            const intensity = Math.max(0, 1 - Math.abs(i - effIndex));
             return (
               <Link
                 key={t.href}
                 href={t.href}
-                className={`flex-1 text-center py-2.5 text-[11px] sm:text-sm font-medium border-b-[3px] whitespace-nowrap transition-colors ${
-                  active
-                    ? 'text-white border-white font-bold'
-                    : 'text-white/70 border-transparent hover:text-white hover:bg-white/5'
-                }`}
+                className="flex-1 text-center py-2.5 text-[11px] sm:text-sm whitespace-nowrap"
+                style={{
+                  color: `rgba(255,255,255,${(0.65 + 0.35 * intensity).toFixed(3)})`,
+                  fontWeight: intensity > 0.5 ? 700 : 500,
+                }}
               >
                 {t.label}
               </Link>
             );
           })}
+          <span
+            aria-hidden
+            className="absolute bottom-0 left-0 h-[3px] bg-white rounded-full"
+            style={{
+              width: `${100 / tabs.length}%`,
+              transform: `translateX(${effIndex * 100}%)`,
+              transition: 'transform 0.2s ease-out',
+            }}
+          />
         </div>
       </div>
     </nav>

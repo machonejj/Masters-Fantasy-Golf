@@ -4,16 +4,18 @@ import { useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { navTabs } from '@/lib/tabs';
 import { setSwipeDir } from '@/lib/pageTransition';
+import { setSwipeProgress, clearSwipeProgress } from '@/lib/swipeProgress';
 
 const COMMIT_PX = 60; // horizontal travel needed to change tabs
 const AXIS_LOCK_PX = 12; // movement before we decide horizontal vs. vertical
 const FOLLOW = 0.45; // how much the page follows the finger (tactile hint)
 const FOLLOW_MAX = 80; // cap the live nudge so the commit reset is invisible
+const PROGRESS_FRACTION = 0.35; // swipe this fraction of the screen = highlight fully moved
 
-// Wraps the page content and turns a horizontal drag on touch devices into
-// prev/next tab navigation. Touch-only, so desktop is untouched. The live drag
-// nudges the current page (the "slides off" half); the incoming page slides in
-// via app/template.js to complete the paging motion.
+// Turns a horizontal drag anywhere on the screen into prev/next tab navigation.
+// Listeners live on `window` so the whole viewport is swipeable (not just the
+// content box). Touch-only, so desktop is untouched. The drag nudges the page
+// and slides the nav highlight live; the incoming page slides in via template.js.
 export default function SwipeNav({ isAdmin, children }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -55,13 +57,21 @@ export default function SwipeNav({ isAdmin, children }) {
         d.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
       }
       if (d.axis !== 'x') return; // vertical drag → let the page scroll
-      e.preventDefault(); // we own this horizontal gesture
+      if (e.cancelable) e.preventDefault(); // we own this horizontal gesture
       d.dx = dx;
-      // Resist when there's no tab that way (rubber-band at the ends).
-      const atEdge = (dx < 0 && !nextHref) || (dx > 0 && !prevHref);
+
+      // Which tab are we heading toward? (Stay put at the ends.)
+      const targetIdx = dx < 0 ? (nextHref ? idx + 1 : idx) : prevHref ? idx - 1 : idx;
+      const atEdge = targetIdx === idx;
+
+      // Nudge the page with the finger (rubber-band at the ends).
       let eff = dx * FOLLOW * (atEdge ? 0.35 : 1);
       eff = Math.max(-FOLLOW_MAX, Math.min(FOLLOW_MAX, eff));
       setX(eff, false);
+
+      // Slide the nav highlight toward the target tab.
+      const progress = Math.min(Math.abs(dx) / (window.innerWidth * PROGRESS_FRACTION), 1);
+      setSwipeProgress({ active: true, from: idx, to: targetIdx, progress });
     };
 
     const onEnd = () => {
@@ -71,25 +81,28 @@ export default function SwipeNav({ isAdmin, children }) {
       if (d.axis !== 'x') return;
       const target = d.dx <= -COMMIT_PX ? nextHref : d.dx >= COMMIT_PX ? prevHref : null;
       if (target) {
-        // Clear the live nudge instantly (no visible snap — the cap is small),
-        // tell the template which way to slide, then navigate.
-        setX(0, false);
+        const targetIdx = d.dx < 0 ? idx + 1 : idx - 1;
+        setX(0, false); // clear the small finger nudge (cap is tiny → no visible snap)
+        // Hold the highlight on the destination until the route catches up, so it
+        // doesn't snap back; NavBar clears it once the pathname updates.
+        setSwipeProgress({ active: true, from: targetIdx, to: targetIdx, progress: 0 });
         setSwipeDir(d.dx < 0 ? 1 : -1, target);
         router.push(target);
       } else {
         setX(0, true); // didn't cross the threshold → spring back
+        clearSwipeProgress();
       }
     };
 
-    el.addEventListener('touchstart', onStart, { passive: true });
-    el.addEventListener('touchmove', onMove, { passive: false });
-    el.addEventListener('touchend', onEnd, { passive: true });
-    el.addEventListener('touchcancel', onEnd, { passive: true });
+    window.addEventListener('touchstart', onStart, { passive: true });
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('touchend', onEnd, { passive: true });
+    window.addEventListener('touchcancel', onEnd, { passive: true });
     return () => {
-      el.removeEventListener('touchstart', onStart);
-      el.removeEventListener('touchmove', onMove);
-      el.removeEventListener('touchend', onEnd);
-      el.removeEventListener('touchcancel', onEnd);
+      window.removeEventListener('touchstart', onStart);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onEnd);
+      window.removeEventListener('touchcancel', onEnd);
     };
   }, [pathname, isAdmin, router]);
 
