@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { navTabs } from '@/lib/tabs';
 import {
@@ -15,9 +15,30 @@ import {
 export default function NavBar({ profile }) {
   const pathname = usePathname();
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useRef(createClient()).current;
 
   const tabs = navTabs(profile?.is_admin);
+
+  // Watch the draft status so the Draft Room tab can pulse "live" while a draft
+  // is running. Updates over realtime (draft_state is in the publication).
+  const [draftStatus, setDraftStatus] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    const fetchStatus = async () => {
+      const { data } = await supabase.from('draft_state').select('status').eq('id', 1).maybeSingle();
+      if (alive) setDraftStatus(data?.status ?? null);
+    };
+    fetchStatus();
+    const ch = supabase
+      .channel('nav-draft-status')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'draft_state' }, fetchStatus)
+      .subscribe();
+    return () => {
+      alive = false;
+      supabase.removeChannel(ch);
+    };
+  }, [supabase]);
+  const draftLive = draftStatus === 'active';
 
   // Which tab the URL says we're on.
   const activeIndex =
@@ -88,6 +109,15 @@ export default function NavBar({ profile }) {
                 }}
               >
                 {t.label}
+                {t.href === '/draft' && draftLive && (
+                  <span
+                    className="relative ml-1 inline-flex w-1.5 h-1.5 align-middle"
+                    title="Draft in progress"
+                  >
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-masters-gold opacity-75 animate-ping" />
+                    <span className="relative inline-flex rounded-full w-1.5 h-1.5 bg-masters-gold" />
+                  </span>
+                )}
               </Link>
             );
           })}
