@@ -75,6 +75,20 @@ export default function AdminPage() {
       )}
 
       <TournamentPicker settings={settings} golfers={golfers} busy={busy} run={run} flash={flash} />
+      <DraftControls
+        settings={settings}
+        participants={participants}
+        busy={busy}
+        run={run}
+        flash={flash}
+      />
+      <Participants
+        participants={participants}
+        settings={settings}
+        busy={busy}
+        run={run}
+        flash={flash}
+      />
       <PurseLog
         settings={settings}
         participants={participants}
@@ -84,25 +98,11 @@ export default function AdminPage() {
         run={run}
         flash={flash}
       />
-      <DraftControls
-        settings={settings}
-        participants={participants}
-        busy={busy}
-        run={run}
-        flash={flash}
-      />
       <Replacements
         settings={settings}
         participants={participants}
         golfers={golfers}
         picks={picks}
-        busy={busy}
-        run={run}
-        flash={flash}
-      />
-      <Participants
-        participants={participants}
-        settings={settings}
         busy={busy}
         run={run}
         flash={flash}

@@ -111,11 +111,11 @@ export default function NavBar({ profile }) {
                 {t.label}
                 {t.href === '/draft' && draftLive && (
                   <span
-                    className="relative ml-1 inline-flex w-1.5 h-1.5 align-middle"
-                    title="Draft in progress"
+                    className="ml-1.5 inline-flex items-center gap-1 align-middle text-[9px] font-bold uppercase tracking-wide text-red-500"
+                    title="Draft live"
                   >
-                    <span className="absolute inline-flex h-full w-full rounded-full bg-masters-gold opacity-75 animate-ping" />
-                    <span className="relative inline-flex rounded-full w-1.5 h-1.5 bg-masters-gold" />
+                    <span className="w-2 h-2 rounded-full bg-red-500" />
+                    <span className="hidden sm:inline">Live</span>
                   </span>
                 )}
               </Link>

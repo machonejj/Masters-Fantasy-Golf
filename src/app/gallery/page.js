@@ -237,18 +237,31 @@ export default function GalleryPage() {
             const rows = [...(t.standings || [])].sort((a, b) => (a.position ?? 99) - (b.position ?? 99));
             return (
               <div key={t.id} className="rounded-lg border border-masters-green-light overflow-hidden">
-                <button
-                  onClick={() => toggleLedger(t.id)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-masters-green-pale"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="font-medium text-gray-800 truncate">{t.name}</div>
-                    <div className="text-xs text-gray-400">
-                      {fmtDate(t.completed_at)} · {payoutLabel(t.payout_structure)} · purse {formatMoney(t.purse)}
+                <div className="flex items-stretch">
+                  <button
+                    onClick={() => toggleLedger(t.id)}
+                    className="flex-1 min-w-0 flex items-center gap-3 px-3 py-2.5 text-left hover:bg-masters-green-pale"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium text-gray-800 truncate">{t.name}</div>
+                      <div className="text-xs text-gray-400">
+                        {fmtDate(t.completed_at)} · {payoutLabel(t.payout_structure)} · purse {formatMoney(t.purse)}
+                      </div>
                     </div>
-                  </div>
-                  <span className="text-xs text-masters-green-mid shrink-0">{isOpen ? 'Hide' : 'Final Leaderboard'}</span>
-                </button>
+                    <span className="text-xs text-masters-green-mid shrink-0">{isOpen ? 'Hide' : 'Final Leaderboard'}</span>
+                  </button>
+                  {isAdmin && (
+                    <button
+                      disabled={busy}
+                      onClick={() => deleteTournament(t)}
+                      className="shrink-0 px-3 text-gray-300 hover:text-red-600 hover:bg-red-50"
+                      title="Delete this tournament from The Gallery"
+                      aria-label="Delete tournament"
+                    >
+                      🗑
+                    </button>
+                  )}
+                </div>
                 {isOpen && (
                   <div className="px-3 pb-3 pt-1 bg-white">
                     {rows.length === 0 ? (
@@ -281,17 +294,6 @@ export default function GalleryPage() {
                       ))
                     )}
                     {t.notes && <p className="text-xs text-gray-400 mt-2 italic">“{t.notes}”</p>}
-                    {isAdmin && (
-                      <div className="mt-3 flex justify-end">
-                        <button
-                          disabled={busy}
-                          onClick={() => deleteTournament(t)}
-                          className="text-xs text-red-700 hover:underline"
-                        >
-                          Delete from Gallery
-                        </button>
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
@@ -300,7 +302,7 @@ export default function GalleryPage() {
         </div>
         {isAdmin && (
           <p className="text-[11px] text-gray-400 mt-2">
-            Admin: open a tournament to set its champion or remove it.
+            Admin: tap 🗑 to remove a tournament, or open one to set its champion.
           </p>
         )}
       </div>

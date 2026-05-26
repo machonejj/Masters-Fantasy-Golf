@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePoolData } from '@/lib/usePoolData';
 import { Loading, PageHeader } from '@/app/page';
 import { snakePicker, totalPicks, isDraftComplete, activeParticipants } from '@/lib/draft';
@@ -30,6 +30,8 @@ export default function DraftPage() {
   const tickGuard = useRef(0);
   const seenPickRef = useRef(null); // highest pick_number seen (null until first load)
   const pickSound = useRef(null); // sound effect played on each pick
+  const audioCtxRef = useRef(null); // for the synthesized "your turn" chime
+  const prevTurnRef = useRef(null); // tracks your-turn transitions (null until first load)
 
   // Live ESPN field gives each golfer's athleteId, used for the pick headshot.
   const { live } = useLiveScores();
@@ -74,6 +76,54 @@ export default function DraftPage() {
   );
 
   const isMyTurn = onClock && myParticipant && onClock.id === myParticipant.id;
+
+  // A gentle two-note chime, synthesized so it needs no audio file. Plays when it
+  // becomes YOUR turn to pick (see the effect below). Fails silently if the
+  // browser blocks audio until a gesture.
+  const playTurnChime = useCallback(() => {
+    try {
+      const Ctx = window.AudioContext || window['webkitAudioContext'];
+      if (!Ctx) return;
+      let ctx = audioCtxRef.current;
+      if (!ctx) {
+        ctx = new Ctx();
+        audioCtxRef.current = ctx;
+      }
+      if (ctx.state === 'suspended') ctx.resume();
+      const t0 = ctx.currentTime;
+      // G5 → C6: a soft, rising "ding-ding".
+      [
+        { f: 783.99, at: 0 },
+        { f: 1046.5, at: 0.13 },
+      ].forEach(({ f, at }) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = f;
+        gain.gain.setValueAtTime(0.0001, t0 + at);
+        gain.gain.linearRampToValueAtTime(0.11, t0 + at + 0.02); // gentle
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + at + 0.5);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(t0 + at);
+        osc.stop(t0 + at + 0.55);
+      });
+    } catch {
+      /* no-op */
+    }
+  }, []);
+
+  // Chime once when the turn passes TO you (a reminder you're on the clock).
+  // Baselines on first load so it doesn't fire on mount / tab revisit / refresh.
+  useEffect(() => {
+    if (loading) return;
+    const mine = !!isMyTurn && status === 'active' && !complete;
+    if (prevTurnRef.current === null) {
+      prevTurnRef.current = mine; // baseline — don't chime for an already-active turn
+      return;
+    }
+    if (mine && !prevTurnRef.current) playTurnChime();
+    prevTurnRef.current = mine;
+  }, [loading, isMyTurn, status, complete, playTurnChime]);
 
   const remaining = useMemo(() => {
     if (status !== 'active' || !draftState?.pick_deadline) return null;
