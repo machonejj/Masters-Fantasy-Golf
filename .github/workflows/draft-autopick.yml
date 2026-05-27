@@ -1,0 +1,19 @@
+name: Draft auto-pick
+
+# The scheduled auto-pick cron was retired. Simply DELETING this file left a
+# "ghost" schedule registered on GitHub that kept firing (and failing, since
+# APP_URL was never set) — hence the failure emails. Re-adding the file with NO
+# `schedule:` trigger makes GitHub re-read the workflow and drop that cron, which
+# is the documented way to stop a scheduled workflow.
+#
+# This now runs ONLY when triggered by hand (and is a harmless no-op). The live
+# Draft Room advances picks on its own while open, so no cron is needed. Safe to
+# delete this file again once the failure emails have stopped.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Scheduled draft auto-pick is disabled — nothing to do."
