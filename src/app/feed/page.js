@@ -42,9 +42,13 @@ const evKey = (e) => `${e.teamId}-${e.golfer}-${e.round}-${e.hole}`;
 const moved = (e) =>
   e.teamBefore !== null && e.teamBefore !== undefined && e.teamAfter !== null && e.teamBefore !== e.teamAfter;
 
+// Last /api/feed payload, kept across navigations so returning to the Live Feed
+// shows instantly and revalidates in the background (the endpoint is heavy).
+let feedCache = null;
+
 export default function LiveFeedPage() {
-  const [data, setData] = useState(null);
-  const [status, setStatus] = useState('loading');
+  const [data, setData] = useState(feedCache);
+  const [status, setStatus] = useState(feedCache ? 'ok' : 'loading');
   const [filter, setFilter] = useState('all');
   const [newKeys, setNewKeys] = useState(() => new Set());
   const [selected, setSelected] = useState(null); // golfer to show the scorecard for
@@ -55,10 +59,11 @@ export default function LiveFeedPage() {
     setSelected({ name: e.golfer, owner: e.team, teamSeed: e.seed, athleteId: e.athleteId ?? null });
 
   const load = useCallback(() => {
-    setStatus('loading');
+    if (!feedCache) setStatus('loading'); // only block on a cold load
     return fetch('/api/feed')
       .then((r) => r.json())
       .then((d) => {
+        feedCache = d;
         if (aliveRef.current) {
           setData(d);
           setStatus('ok');
@@ -70,7 +75,11 @@ export default function LiveFeedPage() {
   useEffect(() => {
     aliveRef.current = true;
     load();
-    const t = setInterval(load, 90000);
+    // Only poll while the app is in the foreground, so a backgrounded tab isn't
+    // hammering the heavy feed endpoint.
+    const t = setInterval(() => {
+      if (document.visibilityState === 'visible') load();
+    }, 90000);
     return () => {
       aliveRef.current = false;
       clearInterval(t);

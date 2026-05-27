@@ -1,7 +1,8 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { usePoolData } from '@/lib/usePoolData';
+import { useLiveScores } from '@/lib/useLiveScores';
 import { Loading, PageHeader } from '@/app/page';
 import { adjustedTotal, scoreText, scoreColor, liveRoundIndex } from '@/lib/scoring';
 import { teamColor } from '@/lib/teamColors';
@@ -13,7 +14,9 @@ const FILTERS = ['all', 'drafted'];
 
 export default function FieldPage() {
   const { loading, user, settings, golfers, picks, participants } = usePoolData();
-  const [live, setLive] = useState({ rows: {}, status: 'idle', updatedAt: null, cut: null });
+  // Live ESPN scores come from the shared store (cached across tabs, one fetch).
+  const { live: liveMap, cut: liveCut, status: liveStatus, updatedAt, refresh: loadLive } =
+    useLiveScores();
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null); // { name, owner, athleteId, teamSeed }
@@ -26,26 +29,6 @@ export default function FieldPage() {
   const caret = (key) => (sort.key === key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : '');
 
   const opts = settings ? { coursePar: settings.course_par } : {};
-
-  async function loadLive() {
-    setLive((l) => ({ ...l, status: 'loading' }));
-    try {
-      const res = await fetch('/api/golfers/live');
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'failed');
-      const map = {};
-      for (const c of data.competitors || []) map[c.name.toLowerCase()] = c;
-      setLive({ rows: map, status: 'ok', updatedAt: data.updatedAt, cut: data.cut ?? null });
-    } catch {
-      setLive((l) => ({ ...l, status: 'error' }));
-    }
-  }
-
-  useEffect(() => {
-    loadLive();
-    const t = setInterval(loadLive, 60000);
-    return () => clearInterval(t);
-  }, []);
 
   // golferId → owning team { name, seed } for the color coding.
   const ownerByGolfer = useMemo(() => {
@@ -61,7 +44,7 @@ export default function FieldPage() {
   const merged = useMemo(
     () =>
       golfers.map((g) => {
-        const lv = live.rows[g.name.toLowerCase()];
+        const lv = liveMap?.[g.name.toLowerCase()];
         const rounds = lv?.rounds ?? [g.r1, g.r2, g.r3, g.r4];
         const status = lv?.status ?? g.status;
         // Use the penalty-adjusted total so cut golfers carry +8 per missed
@@ -77,7 +60,7 @@ export default function FieldPage() {
           status,
         };
       }),
-    [golfers, live, ownerByGolfer, opts]
+    [golfers, liveMap, ownerByGolfer, opts]
   );
 
   // Golf-style leaderboard position by total, with ties → 1, T2, T2, 4 …
@@ -149,7 +132,7 @@ export default function FieldPage() {
   // as ESPN's projection moves. It never shows in R1, and once R2 is complete
   // (golfers get marked cut) the cut is final and baked into the board, so it
   // disappears for the weekend (R3/R4).
-  const cut = live.cut;
+  const cut = liveCut;
   const currentRound = Math.max(
     0,
     ...merged.map(
@@ -174,7 +157,7 @@ export default function FieldPage() {
         title="The Field"
         subtitle={settings?.tournament_name}
         action={
-          <LiveStatus status={live.status} updatedAt={live.updatedAt} onRefresh={loadLive} />
+          <LiveStatus status={liveStatus} updatedAt={updatedAt} onRefresh={loadLive} />
         }
       />
 

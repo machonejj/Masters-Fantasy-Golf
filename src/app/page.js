@@ -193,8 +193,30 @@ export default function LeaderboardPage() {
   );
 }
 
+// Skeleton placeholder shown on a cold load (rare now that pool data is cached
+// across tabs) — a pulsing header + a few card rows, so a tab never flashes
+// blank or a bare "Loading…".
 export function Loading() {
-  return <div className="text-center text-gray-400 py-16">Loading…</div>;
+  return (
+    <div className="animate-pulse" aria-busy="true" aria-label="Loading">
+      <div className="flex items-end justify-between mb-5">
+        <div className="space-y-2">
+          <div className="h-6 w-40 rounded bg-masters-green-light" />
+          <div className="h-3 w-56 rounded bg-gray-200" />
+        </div>
+        <div className="h-7 w-20 rounded-full bg-gray-200" />
+      </div>
+      <div className="space-y-3">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <div key={i} className="card flex items-center gap-3">
+            <div className="h-8 w-8 rounded-full bg-masters-green-light shrink-0" />
+            <div className="flex-1 h-4 rounded bg-gray-200" />
+            <div className="h-4 w-12 rounded bg-gray-200 shrink-0" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export function PageHeader({ title, subtitle, action }) {

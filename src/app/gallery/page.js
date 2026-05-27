@@ -248,7 +248,12 @@ export default function GalleryPage() {
                         {fmtDate(t.completed_at)} · {payoutLabel(t.payout_structure)} · purse {formatMoney(t.purse)}
                       </div>
                     </div>
-                    <span className="text-xs text-masters-green-mid shrink-0">{isOpen ? 'Hide' : 'Final Leaderboard'}</span>
+                    <span
+                      className={`text-gray-400 text-xs shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                      aria-hidden
+                    >
+                      ▼
+                    </span>
                   </button>
                   {isAdmin && (
                     <button

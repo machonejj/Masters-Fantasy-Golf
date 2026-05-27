@@ -12,6 +12,34 @@ const FOLLOW = 0.45; // how much the page follows the finger (tactile hint)
 const FOLLOW_MAX = 80; // cap the live nudge so the commit reset is invisible
 const PROGRESS_FRACTION = 0.35; // swipe this fraction of the screen = highlight fully moved
 
+// On commit, freeze a snapshot of the page you're leaving into a fixed overlay
+// and slide it off — while the incoming page slides in from the other side via
+// app/template.js. So you briefly see BOTH screens cross. `dir`: 1 = forward
+// (old exits left), -1 = back (old exits right).
+function spawnExitOverlay(el, dir) {
+  if (typeof document === 'undefined' || !el) return;
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  const rect = el.getBoundingClientRect();
+  const clip = document.createElement('div');
+  clip.style.cssText =
+    'position:fixed;inset:0;overflow:hidden;z-index:40;pointer-events:none;';
+  const slider = document.createElement('div');
+  slider.style.cssText = `position:absolute;top:${rect.top}px;left:${rect.left}px;width:${rect.width}px;will-change:transform;transition:transform .3s cubic-bezier(.22,.61,.36,1);`;
+  const clone = el.cloneNode(true);
+  clone.style.transform = 'none';
+  // Strip any leftover enter-animation classes so the clone doesn't re-animate.
+  clone.querySelectorAll?.('.page-in-right,.page-in-left').forEach((n) =>
+    n.classList.remove('page-in-right', 'page-in-left')
+  );
+  slider.appendChild(clone);
+  clip.appendChild(slider);
+  document.body.appendChild(clip);
+  requestAnimationFrame(() => {
+    slider.style.transform = `translateX(${dir === 1 ? '-100%' : '100%'})`;
+  });
+  setTimeout(() => clip.remove(), 340);
+}
+
 // Turns a horizontal drag anywhere on the screen into prev/next tab navigation.
 // Listeners live on `window` so the whole viewport is swipeable (not just the
 // content box). Touch-only, so desktop is untouched. The drag nudges the page
@@ -81,12 +109,15 @@ export default function SwipeNav({ isAdmin, children }) {
       if (d.axis !== 'x') return;
       const target = d.dx <= -COMMIT_PX ? nextHref : d.dx >= COMMIT_PX ? prevHref : null;
       if (target) {
-        const targetIdx = d.dx < 0 ? idx + 1 : idx - 1;
-        setX(0, false); // clear the small finger nudge (cap is tiny → no visible snap)
+        const dir = d.dx < 0 ? 1 : -1;
+        const targetIdx = idx + dir;
+        // Freeze the outgoing screen and slide it off as the new one slides in.
+        spawnExitOverlay(el, dir);
+        setX(0, false); // clear the small finger nudge (the snapshot now shows the old page)
         // Hold the highlight on the destination until the route catches up, so it
         // doesn't snap back; NavBar clears it once the pathname updates.
         setSwipeProgress({ active: true, from: targetIdx, to: targetIdx, progress: 0 });
-        setSwipeDir(d.dx < 0 ? 1 : -1, target);
+        setSwipeDir(dir, target);
         router.push(target);
       } else {
         setX(0, true); // didn't cross the threshold → spring back

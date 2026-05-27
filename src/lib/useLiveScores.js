@@ -1,47 +1,20 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSyncExternalStore } from 'react';
+import {
+  subscribeLive,
+  getLiveSnapshot,
+  getLiveServerSnapshot,
+  refreshLive,
+} from '@/lib/liveStore';
 
-// Polls the live ESPN feed and returns a name→competitor map (null until loaded),
-// the last update time, a status, and a manual refresh(). Pages get live data on
-// an interval and can also offer a "↻ Live" button via the shared LiveStatus.
-export function useLiveScores(pollMs = 60000) {
-  const [live, setLive] = useState(null);
-  const [updatedAt, setUpdatedAt] = useState(null);
-  const [status, setStatus] = useState('loading'); // loading | ok | error
-  const aliveRef = useRef(true);
-
-  const refresh = useCallback(async () => {
-    setStatus('loading');
-    try {
-      const res = await fetch('/api/golfers/live');
-      const data = await res.json();
-      if (!aliveRef.current) return;
-      if (!res.ok) {
-        setStatus('error');
-        return;
-      }
-      const map = {};
-      for (const c of data.competitors || []) map[c.name.toLowerCase()] = c;
-      setLive(map);
-      setUpdatedAt(data.updatedAt || new Date().toISOString());
-      setStatus('ok');
-    } catch {
-      if (aliveRef.current) setStatus('error'); // keep the last good data on a blip
-    }
-  }, []);
-
-  useEffect(() => {
-    aliveRef.current = true;
-    refresh();
-    const t = setInterval(refresh, pollMs);
-    return () => {
-      aliveRef.current = false;
-      clearInterval(t);
-    };
-  }, [pollMs, refresh]);
-
-  return { live, updatedAt, status, refresh };
+// Reads the shared live-scores store: a name→competitor map (null until loaded),
+// the projected cut line, last-update time, a status, and a manual refresh().
+// Backed by one app-wide ESPN fetch, so it's instant on tab switches and never
+// fetches more than once per cycle no matter how many components use it.
+export function useLiveScores() {
+  const s = useSyncExternalStore(subscribeLive, getLiveSnapshot, getLiveServerSnapshot);
+  return { live: s.live, cut: s.cut, updatedAt: s.updatedAt, status: s.status, refresh: refreshLive };
 }
 
 // Overlays a golfer's stored round scores with the live feed (authoritative when
