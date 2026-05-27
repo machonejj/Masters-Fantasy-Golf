@@ -6,6 +6,7 @@ import { Loading, PageHeader } from '@/app/page';
 import { snakePicker, totalPicks, isDraftComplete, activeParticipants } from '@/lib/draft';
 import { teamColor } from '@/lib/teamColors';
 import { useLiveScores } from '@/lib/useLiveScores';
+import PlayerProfileCard from '@/components/PlayerProfileCard';
 
 function fmtClock(secs) {
   if (secs == null || secs < 0) secs = 0;
@@ -25,6 +26,7 @@ export default function DraftPage() {
   const [picking, setPicking] = useState(false);
   const [error, setError] = useState('');
   const [pickReveal, setPickReveal] = useState(null); // { name, team, seed, mine, athleteId }
+  const [profilePlayer, setProfilePlayer] = useState(null); // golfer to scout in the card
   const tickGuard = useRef(0);
   const seenPickRef = useRef(null); // highest pick_number seen (null until first load)
   const pickSound = useRef(null); // sound effect played on each pick
@@ -239,6 +241,16 @@ export default function DraftPage() {
     }
   }
 
+  // Open the scouting card for a golfer (athleteId comes from the live field).
+  function openProfile(g) {
+    setProfilePlayer({
+      name: g.name,
+      athleteId: live?.[g.name.toLowerCase()]?.athleteId ?? null,
+      rank: g.rank,
+      golferId: g.id,
+    });
+  }
+
   if (loading) return <Loading />;
 
   const total = totalPicks(activeParts, gpt);
@@ -360,7 +372,12 @@ export default function DraftPage() {
                   key={g.id}
                   className="flex items-center justify-between py-2 border-b border-masters-green-light/60 last:border-0"
                 >
-                  <div className="min-w-0 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openProfile(g)}
+                    title="Tap for scouting report"
+                    className="min-w-0 flex items-center gap-2 text-left flex-1 hover:opacity-70 transition-opacity"
+                  >
                     <span
                       className={`text-xs tabular-nums w-8 shrink-0 text-right ${
                         fav ? 'text-masters-gold font-bold' : 'text-gray-400'
@@ -370,7 +387,8 @@ export default function DraftPage() {
                     </span>
                     <span className="font-medium truncate">{g.name}</span>
                     {g.odds && <span className="text-xs text-gray-400 shrink-0">{g.odds}</span>}
-                  </div>
+                    <span className="text-gray-300 text-xs shrink-0">ⓘ</span>
+                  </button>
                   {canPick && (
                     <button
                       disabled={picking}
@@ -469,6 +487,19 @@ export default function DraftPage() {
       )}
 
       {pickReveal && <PickReveal pick={pickReveal} onClose={() => setPickReveal(null)} />}
+
+      {profilePlayer && (
+        <PlayerProfileCard
+          player={profilePlayer}
+          busy={picking}
+          canPick={status === 'active' && !complete && (isMyTurn || profile?.is_admin)}
+          onDraft={() => {
+            draftGolfer(profilePlayer.golferId);
+            setProfilePlayer(null);
+          }}
+          onClose={() => setProfilePlayer(null)}
+        />
+      )}
     </div>
   );
 }
