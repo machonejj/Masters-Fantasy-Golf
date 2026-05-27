@@ -45,17 +45,16 @@ function formatToPar(n) {
   return n > 0 ? `+${n}` : String(n);
 }
 
-// Holes played in the current round → "F" once complete, the hole number while
-// playing, or a tee time / "—" before they've started. ESPN reports thru=0 for a
-// player who hasn't teed off (e.g. scheduled for the next round) — we must NOT
-// treat that as "thru 0 holes" (it read as a live "0" and kept the finished round
-// looking live), so thru=0 falls through to the tee time.
+// Current-round progress: "F" once the round is complete, the hole number while
+// playing, or null before they've teed off (the UI then shows the tee time).
+// ESPN reports thru=0 + status "Scheduled" for a player who hasn't started, so
+// thru=0 must fall through to null (not read as a live "thru 0 holes").
 function thruLabel(status) {
   const t = status?.type;
   const thru = status?.thru;
   if (thru >= 18 || /finish|complete|final|post/i.test(t?.name || '')) return 'F';
   if (thru != null && thru > 0) return String(thru);
-  return t?.shortDetail || '—';
+  return null; // hasn't started this round → the UI shows the tee time instead
 }
 
 export async function fetchEspnLeaderboard(eventId = null) {
@@ -94,6 +93,13 @@ export async function fetchEspnLeaderboard(eventId = null) {
       .filter((ls) => ls && ls.value !== undefined)
       .map((ls) => parseToPar(ls.displayValue));
 
+    // Tee time for the round they're about to play (or playing). ESPN puts it on
+    // each round's linescore as an ISO/UTC time; the current round is the last
+    // entry. Shown by the UI only before they tee off (when thru is null), and it
+    // naturally rolls to the next round's tee time when ESPN posts it.
+    const ls = c.linescores || [];
+    const teeTime = (ls.length ? ls[ls.length - 1] : null)?.teeTime || null;
+
     // Running to-par = sum of the round scores. This is what the leaderboard
     // shows live; ESPN's own top-level `score` field lags a round mid-play.
     const total = rounds.length ? rounds.reduce((a, b) => a + (b ?? 0), 0) : null;
@@ -104,6 +110,7 @@ export async function fetchEspnLeaderboard(eventId = null) {
       total,
       score: formatToPar(total),
       thru: thruLabel(c.status),
+      teeTime,
       inProgress: /in_progress/i.test(statusName),
       status,
       rounds,

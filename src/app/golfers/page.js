@@ -4,7 +4,7 @@ import { Fragment, useMemo, useState } from 'react';
 import { usePoolData } from '@/lib/usePoolData';
 import { useLiveScores } from '@/lib/useLiveScores';
 import { Loading, PageHeader } from '@/app/page';
-import { adjustedTotal, scoreText, scoreColor, liveRoundIndex } from '@/lib/scoring';
+import { adjustedTotal, scoreText, scoreColor, liveRoundIndex, formatTeeTime } from '@/lib/scoring';
 import { teamColor } from '@/lib/teamColors';
 import PlayerScorecard from '@/components/PlayerScorecard';
 import LiveStatus from '@/components/LiveStatus';
@@ -56,7 +56,10 @@ export default function FieldPage() {
           owner: ownerByGolfer[g.id] || null,
           rounds,
           total,
-          thru: lv?.thru ?? g.thru ?? '—',
+          // Live thru is authoritative when present (null = hasn't teed off);
+          // only fall back to the stored value when there's no live entry.
+          thru: lv ? lv.thru : g.thru ?? null,
+          teeTime: lv?.teeTime ?? null,
           status,
         };
       }),
@@ -214,6 +217,14 @@ export default function FieldPage() {
               const color = teamColor(r.owner?.seed);
               const isCut = r.status === 'cut' || r.status === 'wd';
               const thruNum = /^\d+$/.test(String(r.thru));
+              // Before they tee off, show the tee time (viewer's local time).
+              const thruLabel = isCut
+                ? r.status === 'wd'
+                  ? 'WD'
+                  : 'CUT'
+                : thruNum || r.thru === 'F'
+                  ? r.thru
+                  : formatTeeTime(r.teeTime) || '—';
               const liveIdx = liveRoundIndex(r.rounds, r.thru, r.status);
               const clickable = !!r.athleteId;
               return (
@@ -257,7 +268,7 @@ export default function FieldPage() {
                       thruNum ? 'text-amber-600 font-bold' : 'text-gray-400'
                     }`}
                   >
-                    {isCut ? (r.status === 'wd' ? 'WD' : 'CUT') : r.thru}
+                    {thruLabel}
                   </td>
                   {[0, 1, 2, 3].map((ri) => {
                     const v = r.rounds?.[ri];

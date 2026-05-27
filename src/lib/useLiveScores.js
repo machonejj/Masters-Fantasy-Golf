@@ -30,7 +30,8 @@ export function mergeLive(golfer, liveMap) {
     r3: r[2] ?? null,
     r4: r[3] ?? null,
     status: lv.status ?? golfer.status,
-    thru: lv.thru ?? golfer.thru,
+    thru: lv.thru ?? null, // live is authoritative; null = hasn't teed off
+    teeTime: lv.teeTime ?? null,
     athleteId: lv.athleteId ?? golfer.athleteId ?? null,
   };
 }

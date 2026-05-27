@@ -91,6 +91,16 @@ export function scoreText(s) {
   return s > 0 ? `+${s}` : String(s);
 }
 
+// A tee time (ISO/UTC from ESPN) shown in the viewer's local time, e.g. "9:28 AM".
+// Returns null for a missing/invalid value. Called client-side so it uses the
+// device's timezone.
+export function formatTeeTime(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
 // Tailwind text color class for a to-par value.
 export function scoreColor(s) {
   if (s === null || s === undefined) return 'text-gray-400';

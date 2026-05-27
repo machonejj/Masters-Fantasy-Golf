@@ -22,7 +22,6 @@ export default function DraftPage() {
 
   const [now, setNow] = useState(Date.now());
   const [search, setSearch] = useState('');
-  const [sortBy, setSortBy] = useState('fav'); // 'fav' (world ranking) | 'name'
   const [picking, setPicking] = useState(false);
   const [error, setError] = useState('');
   const [pickReveal, setPickReveal] = useState(null); // { name, team, seed, mine, athleteId }
@@ -206,16 +205,13 @@ export default function DraftPage() {
     const list = golfers
       .filter((g) => !takenIds.has(g.id))
       .filter((g) => g.name.toLowerCase().includes(q));
-    if (sortBy === 'name') {
-      return [...list].sort((a, b) => a.name.localeCompare(b.name));
-    }
-    // Favorites: best world ranking first; unranked longshots fall to the bottom.
+    // Always "favorites": best world ranking first; unranked longshots last.
     return [...list].sort((a, b) => {
       const ra = a.rank ?? Infinity;
       const rb = b.rank ?? Infinity;
       return ra === rb ? a.name.localeCompare(b.name) : ra - rb;
     });
-  }, [golfers, takenIds, search, sortBy]);
+  }, [golfers, takenIds, search]);
 
   // How many of the remaining field are world-ranked — tells us whether the
   // "Favorites" ordering is meaningful or the event simply has no ranking data.
@@ -342,40 +338,17 @@ export default function DraftPage() {
               <p className="text-xs text-gray-400 mb-3">Waiting for your turn…</p>
             )
           )}
-          {/* Sort (favorites by world ranking, or A–Z) + search ─────────── */}
-          <div className="flex items-center justify-end mb-2">
-            <div className="inline-flex rounded-full bg-masters-green-light/40 p-0.5 text-xs font-semibold">
-              {[
-                { v: 'fav', label: 'Favorites' },
-                { v: 'name', label: 'A–Z' },
-              ].map((s) => (
-                <button
-                  key={s.v}
-                  onClick={() => setSortBy(s.v)}
-                  className={`px-2.5 py-1 rounded-full transition ${
-                    sortBy === s.v
-                      ? 'bg-white text-masters-green shadow-sm'
-                      : 'text-masters-green-mid hover:text-masters-green'
-                  }`}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          </div>
           <input
             className="input mb-2"
             placeholder="Search golfers…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          {sortBy === 'fav' && (
-            <p className="text-[11px] text-gray-400 mb-2">
-              {rankedCount > 0
-                ? 'Ordered by world ranking — the betting-favorite order.'
-                : 'No world ranking for this field yet — refresh the field in Admin.'}
-            </p>
-          )}
+          <p className="text-[11px] text-gray-400 mb-2">
+            {rankedCount > 0
+              ? 'Ordered by world ranking — the betting-favorite order.'
+              : 'No world ranking for this field yet — refresh the field in Admin.'}
+          </p>
           {/* ~6 golfers visible; scroll for the rest. */}
           <div className="max-h-[264px] overflow-y-auto -mx-1 px-1">
             {available.map((g) => {

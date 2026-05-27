@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { usePoolData } from '@/lib/usePoolData';
-import { teamData, scoreText, scoreColor, liveRoundIndex } from '@/lib/scoring';
+import { teamData, scoreText, scoreColor, liveRoundIndex, formatTeeTime } from '@/lib/scoring';
 import { activeParticipants } from '@/lib/draft';
 import { teamColor } from '@/lib/teamColors';
 import { useLiveScores, mergeLive } from '@/lib/useLiveScores';
@@ -240,6 +240,9 @@ function ThruCell({ g }) {
   }
   const thru = g.thru;
   const numeric = /^\d+$/.test(String(thru));
+  // Before they tee off (thru null), show the tee time in the viewer's local time.
+  const tee = !numeric && thru !== 'F' ? formatTeeTime(g.teeTime) : null;
+  const label = numeric ? thru : thru === 'F' ? 'F' : tee || '–';
   return (
     <span
       className={`w-11 shrink-0 text-center tabular-nums ${
@@ -254,12 +257,12 @@ function ThruCell({ g }) {
           ? `Thru ${thru} holes`
           : thru === 'F'
             ? 'Round complete'
-            : thru
-              ? `Tee time ${thru}`
+            : tee
+              ? `Tee time ${tee}`
               : ''
       }
     >
-      {thru || '–'}
+      {label}
     </span>
   );
 }
