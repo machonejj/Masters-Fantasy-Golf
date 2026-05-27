@@ -102,7 +102,11 @@ function start() {
   pollTimer = setInterval(() => {
     if (document.visibilityState === 'visible') refreshPool();
   }, POLL_MS);
-  supabase.auth.onAuthStateChange(() => refreshPool());
+  // NOTE: do NOT call supabase.auth.onAuthStateChange(refreshPool) here. Its
+  // callback runs while supabase holds the auth lock (navigator.locks, present
+  // only in a secure/HTTPS context), and refreshPool's getUser() would await
+  // that same lock → deadlock → "stuck loading" on prod (but not on HTTP dev).
+  // The initial fetch + realtime + poll keep the store fresh without it.
   document.addEventListener('visibilitychange', onVisible);
 }
 
