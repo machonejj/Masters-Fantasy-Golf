@@ -195,7 +195,7 @@ export default function PlayerScorecard({ player, onClose }) {
                     </span>
                   </div>
                   <div className="overflow-x-auto -mx-1 px-1">
-                    <HoleGrid holes={rd.holes} />
+                    <HoleGrid holes={rd.holes} coursePars={data.course?.holes} />
                   </div>
                 </div>
               ))}
@@ -206,37 +206,46 @@ export default function PlayerScorecard({ player, onClose }) {
   );
 }
 
-function HoleGrid({ holes }) {
+function HoleGrid({ holes, coursePars }) {
   // Always render holes 1-18 in natural order. ESPN omits holes a golfer
-  // hasn't reached yet, so a player who started on 10 has gaps before hole 10
-  // mid-round (currently no 7-8-9). Empty slots get placeholder cells so the
-  // layout reads as a real scorecard instead of jumping 6 → 10.
+  // hasn't reached yet, so a 10-tee starter has gaps before hole 10 mid-round.
+  // Par for those unplayed holes comes from the course meta (coursePars) so
+  // the PAR row is complete even though SCORE is blank.
   const byNum = new Map(holes.map((h) => [h.hole, h]));
-  const slots = Array.from({ length: 18 }, (_, i) => byNum.get(i + 1) || null);
+  const parByNum = new Map((coursePars || []).map((c) => [c.number, c.par]));
+  const slots = Array.from({ length: 18 }, (_, i) => {
+    const num = i + 1;
+    const played = byNum.get(num);
+    return {
+      hole: num,
+      par: played?.par ?? parByNum.get(num) ?? null,
+      played,
+    };
+  });
 
   return (
     <table className="text-xs border-separate border-spacing-0.5">
       <tbody>
         <tr>
           <Cell label className="text-gray-400">HOLE</Cell>
-          {slots.map((_, i) => (
-            <Cell key={i + 1} className="text-gray-400 font-medium">{i + 1}</Cell>
+          {slots.map((s) => (
+            <Cell key={s.hole} className="text-gray-400 font-medium">{s.hole}</Cell>
           ))}
         </tr>
         <tr>
           <Cell label className="text-gray-400">PAR</Cell>
-          {slots.map((h, i) => (
-            <Cell key={i + 1} className="text-gray-400">{h ? h.par : '—'}</Cell>
+          {slots.map((s) => (
+            <Cell key={s.hole} className="text-gray-400">{s.par ?? '—'}</Cell>
           ))}
         </tr>
         <tr>
           <Cell label className="text-masters-green font-semibold">SCORE</Cell>
-          {slots.map((h, i) => (
+          {slots.map((s) => (
             <Cell
-              key={i + 1}
-              className={h ? `rounded ${holeClass(h.toPar)}` : 'text-gray-300'}
+              key={s.hole}
+              className={s.played ? `rounded ${holeClass(s.played.toPar)}` : 'text-gray-300'}
             >
-              {h ? h.strokes : '—'}
+              {s.played ? s.played.strokes : '—'}
             </Cell>
           ))}
         </tr>

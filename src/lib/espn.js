@@ -136,7 +136,20 @@ export async function fetchEspnLeaderboard(eventId = null) {
     coursePar,
     cut,
     course: course
-      ? { name: course.name, city: course.address?.city, state: course.address?.state }
+      ? {
+          name: course.name,
+          city: course.address?.city,
+          state: course.address?.state,
+          // Per-hole par for the whole course. Lets the scorecard show the par
+          // row for holes a golfer hasn't reached yet (e.g. a 10-tee starter
+          // mid-round still has 7-8-9 to play, and ESPN omits those entirely
+          // from the player's linescores).
+          holes: (course.holes || []).map((h) => ({
+            number: h.number,
+            par: h.shotsToPar,
+            yards: h.totalYards ?? null,
+          })),
+        }
       : null,
     dates: { start: event?.date || null, end: event?.endDate || null },
     updatedAt: new Date().toISOString(),
