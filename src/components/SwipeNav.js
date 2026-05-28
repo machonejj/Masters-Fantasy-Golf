@@ -37,6 +37,10 @@ export default function SwipeNav({ isAdmin, children }) {
 
     const onStart = (e) => {
       if (e.touches.length !== 1) return;
+      // Modal overlays (player scorecard, profile card) tag themselves with
+      // data-swipe-block. A horizontal drag inside one should scroll its
+      // contents (e.g. the hole-by-hole grid) and never navigate tabs.
+      if (e.target.closest?.('[data-swipe-block]')) return;
       const d = drag.current;
       d.x0 = e.touches[0].clientX;
       d.y0 = e.touches[0].clientY;

@@ -90,6 +90,7 @@ export default function PlayerScorecard({ player, onClose }) {
 
   return (
     <div
+      data-swipe-block
       className="fixed inset-0 z-[100] bg-black/50 flex items-start sm:items-center justify-center p-3 overflow-y-auto"
       onClick={onClose}
     >

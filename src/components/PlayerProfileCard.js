@@ -40,6 +40,7 @@ export default function PlayerProfileCard({ player, canPick, onDraft, busy, onCl
 
   return (
     <div
+      data-swipe-block
       onClick={onClose}
       className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center bg-black/45 backdrop-blur-sm sm:px-6"
     >
