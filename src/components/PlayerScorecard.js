@@ -207,25 +207,37 @@ export default function PlayerScorecard({ player, onClose }) {
 }
 
 function HoleGrid({ holes }) {
+  // Always render holes 1-18 in natural order. ESPN omits holes a golfer
+  // hasn't reached yet, so a player who started on 10 has gaps before hole 10
+  // mid-round (currently no 7-8-9). Empty slots get placeholder cells so the
+  // layout reads as a real scorecard instead of jumping 6 → 10.
+  const byNum = new Map(holes.map((h) => [h.hole, h]));
+  const slots = Array.from({ length: 18 }, (_, i) => byNum.get(i + 1) || null);
+
   return (
     <table className="text-xs border-separate border-spacing-0.5">
       <tbody>
         <tr>
           <Cell label className="text-gray-400">HOLE</Cell>
-          {holes.map((h) => (
-            <Cell key={h.hole} className="text-gray-400 font-medium">{h.hole}</Cell>
+          {slots.map((_, i) => (
+            <Cell key={i + 1} className="text-gray-400 font-medium">{i + 1}</Cell>
           ))}
         </tr>
         <tr>
           <Cell label className="text-gray-400">PAR</Cell>
-          {holes.map((h) => (
-            <Cell key={h.hole} className="text-gray-400">{h.par}</Cell>
+          {slots.map((h, i) => (
+            <Cell key={i + 1} className="text-gray-400">{h ? h.par : '—'}</Cell>
           ))}
         </tr>
         <tr>
           <Cell label className="text-masters-green font-semibold">SCORE</Cell>
-          {holes.map((h) => (
-            <Cell key={h.hole} className={`rounded ${holeClass(h.toPar)}`}>{h.strokes}</Cell>
+          {slots.map((h, i) => (
+            <Cell
+              key={i + 1}
+              className={h ? `rounded ${holeClass(h.toPar)}` : 'text-gray-300'}
+            >
+              {h ? h.strokes : '—'}
+            </Cell>
           ))}
         </tr>
       </tbody>
