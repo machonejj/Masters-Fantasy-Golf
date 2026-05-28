@@ -145,7 +145,11 @@ export default function LeaderboardPage() {
                           <span className="w-9 text-right">Tot</span>
                         </div>
                         {[...row.withScores]
-                          .sort((a, b) => (a.score ?? 999) - (b.score ?? 999))
+                          .sort(
+                            (a, b) =>
+                              (a.score ?? 0) - (b.score ?? 0) ||
+                              (a.score == null ? 1 : 0) - (b.score == null ? 1 : 0)
+                          )
                           .map(({ g, score }) => {
                             const counts = row.countingSet.has(g.id);
                             const missedCut = g.status === 'cut';
