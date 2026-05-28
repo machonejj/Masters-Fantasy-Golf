@@ -74,7 +74,14 @@ export function teamData(participantId, picks, golfers, settings = {}) {
   // best-N: a golfer who hasn't teed off yet is at par (0), not "missing".
   // The team's best 3 should prefer those zeros over a teed-off golfer who's
   // currently over par. Cut/WD scores already carry their penalty.
-  const ranked = [...withScores].sort((a, b) => (a.score ?? 0) - (b.score ?? 0));
+  // Tie-break: when an active golfer's score matches an unstarted golfer's
+  // par-prior 0, prefer the active one — their score is locked in, so they
+  // should get the "counted" badge over a golfer who hasn't teed off.
+  const ranked = [...withScores].sort(
+    (a, b) =>
+      (a.score ?? 0) - (b.score ?? 0) ||
+      (a.score == null ? 1 : 0) - (b.score == null ? 1 : 0)
+  );
 
   const countingRows = ranked.slice(0, counting);
   const countingSet = new Set(countingRows.map((x) => x.g.id));

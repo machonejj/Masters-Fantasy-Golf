@@ -55,16 +55,14 @@ export default function LeaderboardPage() {
         title="Standings"
         subtitle={
           <>
-            {settings?.tournament_name || 'The Masters'} · best{' '}
-            {settings?.counting_scores ?? 3} of {settings?.golfers_per_team ?? 6} count
+            <span className="block">
+              {settings?.tournament_name || 'The Masters'} · best{' '}
+              {settings?.counting_scores ?? 3} of {settings?.golfers_per_team ?? 6} count
+            </span>
             {purse > 0 && (
-              <>
-                {' '}
-                ·{' '}
-                <span className="font-serif italic text-masters-gold">
-                  {formatMoney(purse)} purse
-                </span>
-              </>
+              <span className="block font-serif italic text-masters-gold">
+                {formatMoney(purse)} purse
+              </span>
             )}
           </>
         }
