@@ -6,6 +6,7 @@ import { teamData, scoreText, scoreColor, liveRoundIndex, formatTeeTime } from '
 import { activeParticipants } from '@/lib/draft';
 import { teamColor } from '@/lib/teamColors';
 import { useLiveScores, mergeLive } from '@/lib/useLiveScores';
+import { computePurse, formatMoney } from '@/lib/gallery';
 import PlayerScorecard from '@/components/PlayerScorecard';
 import LiveStatus from '@/components/LiveStatus';
 import SittingOutNotice from '@/components/SittingOutNotice';
@@ -44,6 +45,7 @@ export default function LeaderboardPage() {
   }, [participants, picks, liveGolfers, settings]);
 
   const myId = participants.find((p) => p.user_id === user?.id)?.id ?? null;
+  const purse = computePurse(settings?.buy_in, settings?.paid_count);
 
   if (loading) return <Loading />;
 
@@ -51,9 +53,21 @@ export default function LeaderboardPage() {
     <div>
       <PageHeader
         title="Standings"
-        subtitle={`${settings?.tournament_name || 'The Masters'} · best ${
-          settings?.counting_scores ?? 3
-        } of ${settings?.golfers_per_team ?? 6} count`}
+        subtitle={
+          <>
+            {settings?.tournament_name || 'The Masters'} · best{' '}
+            {settings?.counting_scores ?? 3} of {settings?.golfers_per_team ?? 6} count
+            {purse > 0 && (
+              <>
+                {' '}
+                ·{' '}
+                <span className="font-serif italic text-masters-gold">
+                  {formatMoney(purse)} purse
+                </span>
+              </>
+            )}
+          </>
+        }
         action={
           <LiveStatus status={liveStatus} updatedAt={updatedAt} onRefresh={refreshLive} />
         }

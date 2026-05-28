@@ -4,14 +4,16 @@ import { buildPoolLive } from '@/lib/poolLive';
 import { allTeamWinSeries } from '@/lib/winProbability';
 import { CUT_ROUND_PENALTY } from '@/lib/scoring';
 
-// Sum of the best `n` golfer totals (lower is better); ignores golfers with no
-// score yet. Same best-N rule the standings use.
+// Sum of the best `n` golfer totals (lower is better). A golfer who hasn't
+// teed off counts as par (0), not "missing" — matches the standings rule so
+// pre-tournament teams read "E" rather than the single teed-off golfer's pace.
 function bestN(totals, n) {
+  if (!totals.length) return null;
   const v = totals
-    .filter((t) => t !== null && t !== undefined)
+    .map((t) => (t === null || t === undefined ? 0 : t))
     .sort((a, b) => a - b)
     .slice(0, n);
-  return v.length ? v.reduce((a, b) => a + b, 0) : null;
+  return v.reduce((a, b) => a + b, 0);
 }
 
 // Live feed of drafted golfers' holes (newest first) + the win-probability
@@ -101,13 +103,17 @@ export async function GET() {
     const rb = rank(teamBefore);
     const ra = rank(teamAfter);
     const moved = teamBefore !== teamAfter;
+    // Sole 1st vs tied 1st — only the team whose play caused them to enter
+    // rank 1 gets a highlight. Drops in rank or top-3 churn no longer fire.
+    const tiedAtAfter =
+      teamAfter !== null && teamAfter !== undefined
+        ? others.filter((x) => x !== null && x === teamAfter).length
+        : 0;
     enrich[`${k}|${e.round}|${e.hole}`] = {
       teamBefore,
       teamAfter,
-      tookLead: moved && ra === 1 && rb > 1,
-      lostLead: moved && rb === 1 && ra > 1,
-      top3In: moved && ra <= 3 && rb > 3,
-      top3Out: moved && ra > 3 && rb <= 3,
+      tookLead: moved && ra === 1 && rb > 1 && tiedAtAfter === 0,
+      tiedForLead: moved && ra === 1 && rb > 1 && tiedAtAfter > 0,
     };
     real[k] = e.total; // commit
   }

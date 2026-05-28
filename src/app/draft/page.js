@@ -6,6 +6,7 @@ import { Loading, PageHeader } from '@/app/page';
 import { snakePicker, totalPicks, isDraftComplete, activeParticipants } from '@/lib/draft';
 import { teamColor } from '@/lib/teamColors';
 import { useLiveScores } from '@/lib/useLiveScores';
+import { computePurse, formatMoney } from '@/lib/gallery';
 import PlayerProfileCard from '@/components/PlayerProfileCard';
 
 function fmtClock(secs) {
@@ -277,6 +278,15 @@ export default function DraftPage() {
           <div className="card bg-masters-green text-white text-center mb-5">
             <p className="font-serif text-lg">🏆 The draft is complete!</p>
             <p className="text-white/70 text-sm">Head to Standings to follow the action.</p>
+            {(() => {
+              const purse = computePurse(draftState?.buy_in, draftState?.paid_count);
+              if (!purse) return null;
+              return (
+                <p className="mt-2 font-serif italic text-sm text-masters-gold tracking-wide">
+                  Playing for {formatMoney(purse)}
+                </p>
+              );
+            })()}
           </div>
           <DraftReview picks={picks} golfers={golfers} participants={participants} />
         </>

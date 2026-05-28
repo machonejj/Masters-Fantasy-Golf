@@ -30,9 +30,7 @@ function classify(toPar) {
 // Back-to-back birdies are common, so they get a small inline badge instead.
 function highlightOf(e) {
   if (e.tookLead) return { icon: '🔥', tone: 'good', text: `${e.team} takes the lead` };
-  if (e.top3In) return { icon: '🔥', tone: 'good', text: `${e.team} moves into the top 3` };
-  if (e.lostLead) return { icon: '🚨', tone: 'bad', text: `${e.team} loses the lead` };
-  if (e.top3Out) return { icon: '🚨', tone: 'bad', text: `${e.team} drops out of the top 3` };
+  if (e.tiedForLead) return { icon: '🔥', tone: 'good', text: `${e.team} is tied for 1st` };
   if (e.toPar <= -2) return { icon: '🦅', tone: 'good', text: e.toPar <= -3 ? 'Albatross!' : 'Eagle!' };
   if (e.toPar >= 2) return { icon: '💥', tone: 'bad', text: e.toPar >= 3 ? 'Big number' : 'Double bogey' };
   return null;

@@ -93,12 +93,12 @@ export async function fetchEspnLeaderboard(eventId = null) {
       .filter((ls) => ls && ls.value !== undefined)
       .map((ls) => parseToPar(ls.displayValue));
 
-    // Tee time for the round they're about to play (or playing). ESPN puts it on
-    // each round's linescore as an ISO/UTC time; the current round is the last
-    // entry. Shown by the UI only before they tee off (when thru is null), and it
-    // naturally rolls to the next round's tee time when ESPN posts it.
-    const ls = c.linescores || [];
-    const teeTime = (ls.length ? ls[ls.length - 1] : null)?.teeTime || null;
+    // Tee time for the round they're about to play (or playing). ESPN exposes
+    // this on c.status.teeTime and rolls it forward as rounds complete — far
+    // more reliable than scanning linescores. The old code took the LAST
+    // linescore's teeTime, which is the next-day placeholder for the upcoming
+    // round, so a golfer who hadn't teed off today read with tomorrow's R2 tee.
+    const teeTime = c.status?.teeTime || null;
 
     // Running to-par = sum of the round scores. This is what the leaderboard
     // shows live; ESPN's own top-level `score` field lags a round mid-play.

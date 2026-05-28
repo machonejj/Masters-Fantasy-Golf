@@ -71,14 +71,15 @@ export function teamData(participantId, picks, golfers, settings = {}) {
     .filter(Boolean);
 
   const withScores = teamGolfers.map((g) => ({ g, score: golferTotal(g, opts) }));
-  const ranked = withScores
-    .filter((x) => x.score !== null)
-    .sort((a, b) => a.score - b.score);
+  // best-N: a golfer who hasn't teed off yet is at par (0), not "missing".
+  // The team's best 3 should prefer those zeros over a teed-off golfer who's
+  // currently over par. Cut/WD scores already carry their penalty.
+  const ranked = [...withScores].sort((a, b) => (a.score ?? 0) - (b.score ?? 0));
 
   const countingRows = ranked.slice(0, counting);
   const countingSet = new Set(countingRows.map((x) => x.g.id));
-  const teamScore = countingRows.length
-    ? countingRows.reduce((a, x) => a + x.score, 0)
+  const teamScore = teamGolfers.length
+    ? countingRows.reduce((a, x) => a + (x.score ?? 0), 0)
     : null;
 
   return { golfers: teamGolfers, withScores, countingSet, teamScore };
