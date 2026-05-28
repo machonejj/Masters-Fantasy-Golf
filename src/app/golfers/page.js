@@ -264,8 +264,12 @@ export default function FieldPage() {
                     )}
                   </td>
                   <td
-                    className={`px-1 py-2 text-center text-xs ${
-                      thruNum ? 'text-amber-600 font-bold' : 'text-gray-400'
+                    className={`px-1 py-2 text-center whitespace-nowrap tabular-nums ${
+                      thruNum
+                        ? 'text-xs text-amber-600 font-bold'
+                        : r.thru === 'F' || isCut
+                          ? 'text-xs text-gray-400'
+                          : 'text-[9px] leading-tight text-gray-400'
                     }`}
                   >
                     {thruLabel}
