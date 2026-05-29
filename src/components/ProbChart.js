@@ -43,6 +43,22 @@ function stackLabelYs(legend, y, minGap, topY, bottomY) {
   return ys;
 }
 
+// Pick a "nice" tick step (5%, 10%, 20%, etc.) so the dynamic Y-axis labels
+// land on familiar values even though the range itself is data-driven.
+function niceStep(range, targetCount) {
+  const step0 = range / Math.max(1, targetCount - 1);
+  const choices = [0.005, 0.01, 0.02, 0.025, 0.05, 0.1, 0.2, 0.25, 0.5];
+  for (const c of choices) if (c >= step0) return c;
+  return 0.5;
+}
+function buildTicks(min, max, targetCount) {
+  const step = niceStep(max - min, targetCount);
+  const first = Math.ceil(min / step - 1e-9) * step;
+  const ticks = [];
+  for (let v = first; v <= max + 1e-9; v += step) ticks.push(+v.toFixed(4));
+  return ticks;
+}
+
 // Kalshi-style win-probability race: one line per team (team-colored), with a
 // 1/N even-odds baseline. teams: [{ id, name, seed, series:[{hole,pct}] }].
 // highlightId (optional) draws that team's line bolder and fades the rest.
@@ -63,10 +79,8 @@ export default function ProbChart({ teams, baseline = 0, highlightId = null, com
   const roundsToShow = now == null ? 4 : Math.min(4, Math.floor(now / 18) + 2);
   const DOMAIN = roundsToShow * 18;
   const x = (h) => padL + (h / DOMAIN) * (W - padL - padR);
-  const y = (p) => padT + (1 - p) * (H - padT - padB);
 
   const rounds = Array.from({ length: roundsToShow }, (_, i) => ({ r: i + 1, label: `R${i + 1}` }));
-  const yTicks = compact ? [1, 0.5, 0] : [1, 0.75, 0.5, 0.25, 0];
 
   // Live field progress → "Round 3 · thru 14".
   const nowRound = now != null ? Math.floor(now / 18) + 1 : null;
@@ -92,6 +106,32 @@ export default function ProbChart({ teams, baseline = 0, highlightId = null, com
     })
     .sort((a, b) => b.cur - a.cur);
 
+  // Dynamic Y-axis — zoom to the actual range of the data so movement between
+  // teams isn't compressed by all the empty 60%+ space. Always include the
+  // even-odds baseline as a visual anchor; expand to a minimum window so the
+  // chart never feels weirdly cramped; pad the range so end-dots aren't
+  // glued to the chart edges.
+  let yMin = baseline;
+  let yMax = baseline;
+  for (const t of legend) {
+    for (const s of t.series) {
+      if (s.pct < yMin) yMin = s.pct;
+      if (s.pct > yMax) yMax = s.pct;
+    }
+  }
+  const MIN_WINDOW = 0.12;
+  if (yMax - yMin < MIN_WINDOW) {
+    const center = (yMin + yMax) / 2;
+    yMin = center - MIN_WINDOW / 2;
+    yMax = center + MIN_WINDOW / 2;
+  }
+  const yPad = (yMax - yMin) * 0.1;
+  yMin = Math.max(0, yMin - yPad);
+  yMax = Math.min(1, yMax + yPad);
+
+  const y = (p) => padT + ((yMax - p) / (yMax - yMin)) * (H - padT - padB);
+  const yTicks = buildTicks(yMin, yMax, compact ? 3 : 5);
+
   // Vertical positions for the right-rail labels.
   const minGap = compact ? 11 : 16;
   const labelYs = stackLabelYs(legend, y, minGap, padT + 4, H - padB - 4);
@@ -113,7 +153,7 @@ export default function ProbChart({ teams, baseline = 0, highlightId = null, com
 
       <div className="relative">
         <svg viewBox={`0 0 ${W} ${H}`} className="w-full block" preserveAspectRatio="none">
-          {/* Horizontal probability gridlines + Y-axis % labels */}
+          {/* Horizontal probability gridlines + Y-axis % labels (dynamic) */}
           {yTicks.map((p) => (
             <g key={p}>
               <line
