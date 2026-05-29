@@ -20,6 +20,29 @@ function clipSeries(series, now) {
   return [...kept, { hole: now, pct: last.pct + f * (next.pct - last.pct) }];
 }
 
+// Bloomberg/FT-style right-edge label rail. Lay each team's end-dot label out
+// vertically in the rail (sorted by current win prob), push down to maintain
+// minimum vertical spacing, then pull back up from the bottom if the stack
+// runs past the chart. Returns one y per legend entry, in legend order.
+function stackLabelYs(legend, y, minGap, topY, bottomY) {
+  const ys = legend.map((t) => y(t.cur));
+  // Top-down pass: push each label below its predecessor if too close.
+  let prev = topY - minGap;
+  for (let i = 0; i < ys.length; i++) {
+    if (ys[i] < prev + minGap) ys[i] = prev + minGap;
+    prev = ys[i];
+  }
+  // Bottom-up pass: if the stack overflowed the bottom, pull labels up.
+  if (prev > bottomY) {
+    prev = bottomY + minGap;
+    for (let i = ys.length - 1; i >= 0; i--) {
+      if (ys[i] > prev - minGap) ys[i] = prev - minGap;
+      prev = ys[i];
+    }
+  }
+  return ys;
+}
+
 // Kalshi-style win-probability race: one line per team (team-colored), with a
 // 1/N even-odds baseline. teams: [{ id, name, seed, series:[{hole,pct}] }].
 // highlightId (optional) draws that team's line bolder and fades the rest.
@@ -32,7 +55,7 @@ export default function ProbChart({ teams, baseline = 0, highlightId = null, com
   const W = 320;
   const H = compact ? 139 : 263;
   const padL = 24; // room for the Y-axis percentage labels
-  const padR = 6;
+  const padR = 80; // room for the right-edge label rail
   const padT = compact ? 6 : 10;
   const padB = compact ? 13 : 18;
   // Show only the current round plus the next one (R1 → R1+R2,
@@ -69,6 +92,11 @@ export default function ProbChart({ teams, baseline = 0, highlightId = null, com
     })
     .sort((a, b) => b.cur - a.cur);
 
+  // Vertical positions for the right-rail labels.
+  const minGap = compact ? 11 : 16;
+  const labelYs = stackLabelYs(legend, y, minGap, padT + 4, H - padB - 4);
+  const railX = W - padR + 2; // viewBox-x where the label rail begins
+
   return (
     <div>
       <div className="flex items-center justify-between gap-2 mb-2">
@@ -83,157 +111,161 @@ export default function ProbChart({ teams, baseline = 0, highlightId = null, com
         )}
       </div>
 
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full block -mx-2" style={{ width: 'calc(100% + 1rem)' }} preserveAspectRatio="none">
-        {/* Horizontal probability gridlines + Y-axis % labels */}
-        {yTicks.map((p) => (
-          <g key={p}>
-            <line
-              x1={padL}
-              x2={W - padR}
-              y1={y(p)}
-              y2={y(p)}
-              stroke="#eef1ee"
-              strokeWidth="1"
-            />
+      <div className="relative">
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full block" preserveAspectRatio="none">
+          {/* Horizontal probability gridlines + Y-axis % labels */}
+          {yTicks.map((p) => (
+            <g key={p}>
+              <line
+                x1={padL}
+                x2={W - padR}
+                y1={y(p)}
+                y2={y(p)}
+                stroke="#eef1ee"
+                strokeWidth="1"
+              />
+              <text
+                x={padL - 4}
+                y={y(p)}
+                textAnchor="end"
+                dominantBaseline="middle"
+                fontSize={compact ? 7 : 8}
+                fill="#9ca3af"
+              >
+                {Math.round(p * 100)}%
+              </text>
+            </g>
+          ))}
+
+          {/* Round dividers (only within visible domain) */}
+          {[18, 36, 54].filter((h) => h < DOMAIN).map((h) => (
+            <line key={h} x1={x(h)} x2={x(h)} y1={padT} y2={H - padB} stroke="#e5e7eb" strokeWidth="1" />
+          ))}
+
+          {/* Even-odds baseline */}
+          <line
+            x1={padL}
+            x2={W - padR}
+            y1={y(baseline)}
+            y2={y(baseline)}
+            stroke="#9ca3af"
+            strokeWidth="1"
+            strokeDasharray="3 3"
+          />
+
+          {/* Live "now" marker — where the field currently is */}
+          {now != null && (
+            <g>
+              <line
+                x1={x(now)}
+                x2={x(now)}
+                y1={padT}
+                y2={H - padB}
+                stroke="#c9a84c"
+                strokeWidth="1"
+                strokeDasharray="2 2"
+              />
+              <circle cx={x(now)} cy={padT} r="1.7" fill="#c9a84c" className="animate-pulse" />
+            </g>
+          )}
+
+          {/* Connector lines from each end-dot to its label in the rail */}
+          {legend.map((t, i) => {
+            const last = t.series[t.series.length - 1];
+            const isHi = highlightId && t.id === highlightId;
+            return (
+              <line
+                key={`c-${t.id}`}
+                x1={x(last.hole)}
+                y1={y(last.pct)}
+                x2={railX - 1}
+                y2={labelYs[i]}
+                stroke={t.color}
+                strokeWidth={isHi ? 0.7 : 0.45}
+                strokeOpacity={highlightId && !isHi ? 0.3 : 0.55}
+              />
+            );
+          })}
+
+          {/* Series lines (non-highlighted first so the highlighted draws on top) */}
+          {legend
+            .slice()
+            .sort((a, b) => (a.id === highlightId ? 1 : 0) - (b.id === highlightId ? 1 : 0))
+            .map((t) => {
+              const isHi = highlightId && t.id === highlightId;
+              const d = t.series
+                .map((s, i) => `${i ? 'L' : 'M'}${x(s.hole).toFixed(1)} ${y(s.pct).toFixed(1)}`)
+                .join(' ');
+              const last = t.series[t.series.length - 1];
+              return (
+                <g key={t.id}>
+                  <path
+                    d={d}
+                    fill="none"
+                    stroke={t.color}
+                    strokeWidth={isHi ? 1.1 : 0.7}
+                    strokeOpacity={highlightId && !isHi ? 0.5 : 1}
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                  />
+                  <circle
+                    cx={x(last.hole)}
+                    cy={y(last.pct)}
+                    r={isHi ? 3 : 2.2}
+                    fill={t.color}
+                    fillOpacity={highlightId && !isHi ? 0.5 : 1}
+                    className="animate-pulse"
+                  />
+                </g>
+              );
+            })}
+
+          {/* Round labels at the bottom of the plot area */}
+          {rounds.map((d) => (
             <text
-              x={padL - 4}
-              y={y(p)}
-              textAnchor="end"
-              dominantBaseline="middle"
+              key={d.r}
+              x={x((d.r - 1) * 18 + 9)}
+              y={H - (compact ? 3 : 5)}
+              textAnchor="middle"
               fontSize={compact ? 7 : 8}
               fill="#9ca3af"
             >
-              {Math.round(p * 100)}%
+              {d.label}
             </text>
-          </g>
-        ))}
+          ))}
+        </svg>
 
-        {/* Round dividers (only within visible domain) */}
-        {[18, 36, 54].filter((h) => h < DOMAIN).map((h) => (
-          <line key={h} x1={x(h)} x2={x(h)} y1={padT} y2={H - padB} stroke="#e5e7eb" strokeWidth="1" />
-        ))}
-
-        {/* Even-odds baseline */}
-        <line
-          x1={padL}
-          x2={W - padR}
-          y1={y(baseline)}
-          y2={y(baseline)}
-          stroke="#9ca3af"
-          strokeWidth="1"
-          strokeDasharray="3 3"
-        />
-
-        {/* Live "now" marker — where the field currently is */}
-        {now != null && (
-          <g>
-            <line
-              x1={x(now)}
-              x2={x(now)}
-              y1={padT}
-              y2={H - padB}
-              stroke="#c9a84c"
-              strokeWidth="1"
-              strokeDasharray="2 2"
-            />
-            <circle cx={x(now)} cy={padT} r="1.7" fill="#c9a84c" className="animate-pulse" />
-          </g>
-        )}
-
-        {/* draw non-highlighted first, highlighted on top */}
-        {legend
-          .slice()
-          .sort((a, b) => (a.id === highlightId ? 1 : 0) - (b.id === highlightId ? 1 : 0))
-          .map((t) => {
-            const isHi = highlightId && t.id === highlightId;
-            const d = t.series
-              .map((s, i) => `${i ? 'L' : 'M'}${x(s.hole).toFixed(1)} ${y(s.pct).toFixed(1)}`)
-              .join(' ');
-            const last = t.series[t.series.length - 1];
-            return (
-              <g key={t.id}>
-                <path
-                  d={d}
-                  fill="none"
-                  stroke={t.color}
-                  strokeWidth={isHi ? 1.1 : 0.7}
-                  strokeOpacity={highlightId && !isHi ? 0.5 : 1}
-                  strokeLinejoin="round"
-                  strokeLinecap="round"
-                />
-                <circle
-                  cx={x(last.hole)}
-                  cy={y(last.pct)}
-                  r={isHi ? 3 : 2.2}
-                  fill={t.color}
-                  fillOpacity={highlightId && !isHi ? 0.5 : 1}
-                  className="animate-pulse"
-                />
-              </g>
-            );
-          })}
-
-        {rounds.map((d) => (
-          <text
-            key={d.r}
-            x={x((d.r - 1) * 18 + 9)}
-            y={H - (compact ? 3 : 5)}
-            textAnchor="middle"
-            fontSize={compact ? 7 : 8}
-            fill="#9ca3af"
-          >
-            {d.label}
-          </text>
-        ))}
-      </svg>
-
-      {compact ? (
-        <div className="mt-2 space-y-0.5 text-xs">
-          {legend.map((t) => {
+        {/* Right-edge label rail (HTML overlay so text isn't stretched by the
+            SVG's preserveAspectRatio="none"). Each label sits at the vertical
+            position computed in labelYs[i], expressed as a % of the SVG height. */}
+        <div className="absolute inset-0 pointer-events-none">
+          {legend.map((t, i) => {
             const isHi = highlightId && t.id === highlightId;
             return (
-              <div key={t.id} className={`flex items-center gap-2 ${isHi ? 'font-bold' : ''}`}>
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
-                <span className="truncate min-w-0" style={{ color: t.color }}>
-                  {t.name}
-                </span>
+              <div
+                key={t.id}
+                className={`absolute flex items-center gap-1 whitespace-nowrap leading-none ${
+                  compact ? 'text-[10px]' : 'text-[11px]'
+                } ${isHi ? 'font-bold' : 'font-medium'}`}
+                style={{
+                  top: `${(labelYs[i] / H) * 100}%`,
+                  left: `${(railX / W) * 100}%`,
+                  transform: 'translateY(-50%)',
+                  color: t.color,
+                  opacity: highlightId && !isHi ? 0.7 : 1,
+                }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
+                <span className="truncate max-w-[56px]">{t.name}</span>
                 {t.total !== null && t.total !== undefined && (
-                  <span className={`text-[10px] font-semibold tabular-nums shrink-0 ${scoreColor(t.total)}`}>
-                    {scoreText(t.total)}
-                  </span>
+                  <span className={`tabular-nums ${scoreColor(t.total)}`}>{scoreText(t.total)}</span>
                 )}
-                <span className="ml-auto font-semibold tabular-nums shrink-0" style={{ color: t.color }}>
-                  {Math.round(t.cur * 100)}%
-                </span>
+                <span className="tabular-nums font-semibold">{Math.round(t.cur * 100)}%</span>
               </div>
             );
           })}
         </div>
-      ) : (
-        <div className="mt-3 space-y-1">
-          {legend.map((t) => {
-            const isHi = highlightId && t.id === highlightId;
-            return (
-              <div key={t.id} className={`flex items-center gap-2 text-sm ${isHi ? 'font-bold' : ''}`}>
-                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
-                <span className="flex-1 truncate" style={{ color: t.color }}>
-                  {t.name}
-                </span>
-                <div className="text-right leading-tight">
-                  <div className="font-semibold tabular-nums" style={{ color: t.color }}>
-                    {Math.round(t.cur * 100)}%
-                  </div>
-                  {t.total !== null && t.total !== undefined && (
-                    <div className={`text-[10px] font-semibold tabular-nums ${scoreColor(t.total)}`}>
-                      {scoreText(t.total)}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
