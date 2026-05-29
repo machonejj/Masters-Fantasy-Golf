@@ -30,7 +30,7 @@ export default function ProbChart({ teams, baseline = 0, highlightId = null, com
   if (valid.length === 0) return null;
 
   const W = 320;
-  const H = compact ? 74 : 140;
+  const H = compact ? 111 : 210;
   const padL = 24; // room for the Y-axis percentage labels
   const padR = 6;
   const padT = compact ? 6 : 10;
@@ -82,7 +82,7 @@ export default function ProbChart({ teams, baseline = 0, highlightId = null, com
         )}
       </div>
 
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full block -mx-2" style={{ width: 'calc(100% + 1rem)' }} preserveAspectRatio="none">
         {/* Horizontal probability gridlines + Y-axis % labels */}
         {yTicks.map((p) => (
           <g key={p}>
@@ -187,22 +187,26 @@ export default function ProbChart({ teams, baseline = 0, highlightId = null, com
       </svg>
 
       {compact ? (
-        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+        <div className="mt-2 space-y-0.5 text-xs">
           {legend.map((t) => {
             const isHi = highlightId && t.id === highlightId;
             return (
-              <span key={t.id} className={`inline-flex flex-col items-end leading-tight ${isHi ? 'font-bold' : ''}`}>
-                <span className="inline-flex items-center gap-1" style={{ color: t.color }}>
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: t.color }} />
+              <div key={t.id} className={`flex items-center gap-2 ${isHi ? 'font-bold' : ''}`}>
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
+                <span className="flex-1 truncate" style={{ color: t.color }}>
                   {t.name}
-                  <span className="font-semibold">{Math.round(t.cur * 100)}%</span>
                 </span>
-                {t.total !== null && t.total !== undefined && (
-                  <span className={`text-[10px] font-semibold tabular-nums ${scoreColor(t.total)}`}>
-                    {scoreText(t.total)}
-                  </span>
-                )}
-              </span>
+                <div className="text-right leading-tight">
+                  <div className="font-semibold tabular-nums" style={{ color: t.color }}>
+                    {Math.round(t.cur * 100)}%
+                  </div>
+                  {t.total !== null && t.total !== undefined && (
+                    <div className={`text-[10px] font-semibold tabular-nums ${scoreColor(t.total)}`}>
+                      {scoreText(t.total)}
+                    </div>
+                  )}
+                </div>
+              </div>
             );
           })}
         </div>
