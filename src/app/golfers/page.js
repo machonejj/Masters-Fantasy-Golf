@@ -131,10 +131,12 @@ export default function FieldPage() {
 
   if (loading) return <Loading />;
 
-  // The projected cut line only shows on day 2 (Round 2 in progress) and adjusts
-  // as ESPN's projection moves. It never shows in R1, and once R2 is complete
-  // (golfers get marked cut) the cut is final and baked into the board, so it
-  // disappears for the weekend (R3/R4).
+  // Cut line behavior:
+  //   R1                    → hidden (no cut to show yet)
+  //   R2 in progress        → "Proj. cut" — ESPN's projection, updates live
+  //   R2 done / R3 / R4     → "Cut" — final value, ESPN keeps publishing it
+  // WDs are NOT treated as "the cut has happened" — a single mid-R2 withdrawal
+  // shouldn't hide the projected line for the rest of the field.
   const cut = liveCut;
   const currentRound = Math.max(
     0,
@@ -142,16 +144,26 @@ export default function FieldPage() {
       (r) => (r.rounds || []).filter((v) => v !== null && v !== undefined && v !== '').length
     )
   );
-  const anyCut = merged.some((r) => r.status === 'cut' || r.status === 'wd');
-  const showCut = cut?.score != null && currentRound === 2 && !anyCut;
+  const anyCutFlagged = merged.some((r) => r.status === 'cut');
+  const isFinalCut = currentRound >= 3 || anyCutFlagged;
+  const showCut = cut?.score != null && (currentRound === 2 || isFinalCut);
   // The divider is shown only on the full, total-sorted board, where row order
   // reflects the actual standings.
   const showCutDivider = showCut && filter === 'all' && sort.key === 'total' && sort.dir === 'asc';
   let cutIdx = -1;
   if (showCutDivider) {
-    rows.forEach((r, i) => {
-      if (r.total !== null && r.total <= cut.score) cutIdx = i;
-    });
+    if (isFinalCut) {
+      // Active players sort above cut/WD players, so the divider goes right
+      // after the last active row. Comparing totals to cut.score doesn't work
+      // anymore — once R3 starts, made-cut totals drift past the cut score.
+      rows.forEach((r, i) => {
+        if (r.status === 'active') cutIdx = i;
+      });
+    } else {
+      rows.forEach((r, i) => {
+        if (r.total !== null && r.total <= cut.score) cutIdx = i;
+      });
+    }
   }
 
   return (
@@ -185,9 +197,11 @@ export default function FieldPage() {
         {showCut && (
           <span
             className="chip bg-masters-gold-light text-masters-green"
-            title={`Projected cut${cut.count ? ` — top ${cut.count} & ties` : ''} make the weekend`}
+            title={`${isFinalCut ? 'Cut' : 'Projected cut'}${
+              cut.count ? ` — top ${cut.count} & ties` : ''
+            } ${isFinalCut ? 'made' : 'make'} the weekend`}
           >
-            ✂ Proj. cut {scoreText(cut.score)}
+            ✂ {isFinalCut ? 'Cut' : 'Proj. cut'} {scoreText(cut.score)}
           </span>
         )}
         <input
@@ -321,7 +335,7 @@ export default function FieldPage() {
                       colSpan={8}
                       className="py-1.5 text-center text-[11px] font-bold uppercase tracking-wide text-amber-700 border-y border-dashed border-amber-500"
                     >
-                      ✂ Projected cut · {scoreText(cut.score)}
+                      ✂ {isFinalCut ? 'Cut' : 'Projected cut'} · {scoreText(cut.score)}
                       {cut.count ? ` · top ${cut.count}` : ''}
                     </td>
                   </tr>
