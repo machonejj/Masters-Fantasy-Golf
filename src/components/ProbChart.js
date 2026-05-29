@@ -74,19 +74,24 @@ export default function ProbChart({ teams, baseline = 0, highlightId = null, com
   const padR = 80; // room for the right-edge label rail
   const padT = compact ? 6 : 10;
   const padB = compact ? 13 : 18;
-  // Show R1+R2 by default; widen once the current round is ≥75% through
-  // so the next round eases into view ~4 holes before it actually starts
-  // (R2 ≥75% → add R3; R3 ≥75% → add R4). R1 never widens early — we always
-  // hold the tightest view through R1 and the first three-quarters of R2.
-  // Pre-tournament also shows R1+R2.
-  const currentRound = now == null ? 1 : Math.floor(now / 18) + 1;
-  const fracThroughRound = now == null ? 0 : (now % 18) / 18;
-  const widenEarly = currentRound >= 2 && fracThroughRound >= 0.75 ? 1 : 0;
-  const roundsToShow = now == null ? 2 : Math.max(2, Math.min(4, currentRound + widenEarly));
-  const DOMAIN = roundsToShow * 18;
+  // Right edge of the chart = "now" tracer + one round of lookahead,
+  // floored at 36 holes (R1+R2) so we never zoom tighter than the default
+  // two-round view and capped at 72 (the full tournament). Pre-tournament
+  // defaults to the same 36-hole window. As `now` advances 1 hole, the
+  // window slides 1 hole — no step changes at round boundaries.
+  const DOMAIN = now == null ? 36 : Math.min(72, Math.max(36, now + 18));
   const x = (h) => padL + (h / DOMAIN) * (W - padL - padR);
 
-  const rounds = Array.from({ length: roundsToShow }, (_, i) => ({ r: i + 1, label: `R${i + 1}` }));
+  // Round labels for every round whose start falls inside the domain.
+  // Each is centered on its *visible* slice so partially-shown rounds still
+  // read as theirs (e.g. when R3 is only half in view, its label sits in
+  // the middle of that visible half, not floating off the chart).
+  const rounds = [];
+  for (let r = 1; r <= 4; r++) {
+    const start = (r - 1) * 18;
+    if (start >= DOMAIN) break;
+    rounds.push({ r, label: `R${r}`, center: (start + Math.min(r * 18, DOMAIN)) / 2 });
+  }
 
   // Live field progress → "Round 3 · thru 14".
   const nowRound = now != null ? Math.floor(now / 18) + 1 : null;
@@ -270,7 +275,7 @@ export default function ProbChart({ teams, baseline = 0, highlightId = null, com
           {rounds.map((d) => (
             <text
               key={d.r}
-              x={x((d.r - 1) * 18 + 9)}
+              x={x(d.center)}
               y={H - (compact ? 3 : 5)}
               textAnchor="middle"
               fontSize={compact ? 7 : 8}
