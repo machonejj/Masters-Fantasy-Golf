@@ -74,9 +74,15 @@ export default function ProbChart({ teams, baseline = 0, highlightId = null, com
   const padR = 80; // room for the right-edge label rail
   const padT = compact ? 6 : 10;
   const padB = compact ? 13 : 18;
-  // Show R1+R2 by default; widen only when a round actually completes
-  // (R2 done → add R3; R3 done → add R4). Pre-tournament also shows R1+R2.
-  const roundsToShow = now == null ? 2 : Math.max(2, Math.min(4, Math.floor(now / 18) + 1));
+  // Show R1+R2 by default; widen once the current round is ≥75% through
+  // so the next round eases into view ~4 holes before it actually starts
+  // (R2 ≥75% → add R3; R3 ≥75% → add R4). R1 never widens early — we always
+  // hold the tightest view through R1 and the first three-quarters of R2.
+  // Pre-tournament also shows R1+R2.
+  const currentRound = now == null ? 1 : Math.floor(now / 18) + 1;
+  const fracThroughRound = now == null ? 0 : (now % 18) / 18;
+  const widenEarly = currentRound >= 2 && fracThroughRound >= 0.75 ? 1 : 0;
+  const roundsToShow = now == null ? 2 : Math.max(2, Math.min(4, currentRound + widenEarly));
   const DOMAIN = roundsToShow * 18;
   const x = (h) => padL + (h / DOMAIN) * (W - padL - padR);
 
