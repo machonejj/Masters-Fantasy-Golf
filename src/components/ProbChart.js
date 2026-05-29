@@ -30,18 +30,19 @@ export default function ProbChart({ teams, baseline = 0, highlightId = null, com
   if (valid.length === 0) return null;
 
   const W = 320;
-  const H = compact ? 111 : 210;
+  const H = compact ? 139 : 263;
   const padL = 24; // room for the Y-axis percentage labels
   const padR = 6;
   const padT = compact ? 6 : 10;
   const padB = compact ? 13 : 18;
-  // Fixed 72-hole (4-round) width so R1–R4 always show; the line just stops
-  // where the data does, leaving later rounds as empty space.
-  const DOMAIN = 72;
+  // Show only the current round plus the next one (R1 → R1+R2,
+  // R2 → R1–R3, R3+ → all four). Pre-tournament (now == null) shows all.
+  const roundsToShow = now == null ? 4 : Math.min(4, Math.floor(now / 18) + 2);
+  const DOMAIN = roundsToShow * 18;
   const x = (h) => padL + (h / DOMAIN) * (W - padL - padR);
   const y = (p) => padT + (1 - p) * (H - padT - padB);
 
-  const rounds = [1, 2, 3, 4].map((r) => ({ r, label: `R${r}` }));
+  const rounds = Array.from({ length: roundsToShow }, (_, i) => ({ r: i + 1, label: `R${i + 1}` }));
   const yTicks = compact ? [1, 0.5, 0] : [1, 0.75, 0.5, 0.25, 0];
 
   // Live field progress → "Round 3 · thru 14".
@@ -107,8 +108,8 @@ export default function ProbChart({ teams, baseline = 0, highlightId = null, com
           </g>
         ))}
 
-        {/* Round dividers */}
-        {[18, 36, 54].map((h) => (
+        {/* Round dividers (only within visible domain) */}
+        {[18, 36, 54].filter((h) => h < DOMAIN).map((h) => (
           <line key={h} x1={x(h)} x2={x(h)} y1={padT} y2={H - padB} stroke="#e5e7eb" strokeWidth="1" />
         ))}
 
@@ -193,19 +194,17 @@ export default function ProbChart({ teams, baseline = 0, highlightId = null, com
             return (
               <div key={t.id} className={`flex items-center gap-2 ${isHi ? 'font-bold' : ''}`}>
                 <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
-                <span className="flex-1 truncate" style={{ color: t.color }}>
+                <span className="truncate min-w-0" style={{ color: t.color }}>
                   {t.name}
                 </span>
-                <div className="text-right leading-tight">
-                  <div className="font-semibold tabular-nums" style={{ color: t.color }}>
-                    {Math.round(t.cur * 100)}%
-                  </div>
-                  {t.total !== null && t.total !== undefined && (
-                    <div className={`text-[10px] font-semibold tabular-nums ${scoreColor(t.total)}`}>
-                      {scoreText(t.total)}
-                    </div>
-                  )}
-                </div>
+                {t.total !== null && t.total !== undefined && (
+                  <span className={`text-[10px] font-semibold tabular-nums shrink-0 ${scoreColor(t.total)}`}>
+                    {scoreText(t.total)}
+                  </span>
+                )}
+                <span className="ml-auto font-semibold tabular-nums shrink-0" style={{ color: t.color }}>
+                  {Math.round(t.cur * 100)}%
+                </span>
               </div>
             );
           })}
