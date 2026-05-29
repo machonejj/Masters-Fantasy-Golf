@@ -74,9 +74,9 @@ export default function ProbChart({ teams, baseline = 0, highlightId = null, com
   const padR = 80; // room for the right-edge label rail
   const padT = compact ? 6 : 10;
   const padB = compact ? 13 : 18;
-  // Show only the current round plus the next one (R1 → R1+R2,
-  // R2 → R1–R3, R3+ → all four). Pre-tournament (now == null) shows all.
-  const roundsToShow = now == null ? 4 : Math.min(4, Math.floor(now / 18) + 2);
+  // Show R1+R2 by default; widen only when a round actually completes
+  // (R2 done → add R3; R3 done → add R4). Pre-tournament also shows R1+R2.
+  const roundsToShow = now == null ? 2 : Math.max(2, Math.min(4, Math.floor(now / 18) + 1));
   const DOMAIN = roundsToShow * 18;
   const x = (h) => padL + (h / DOMAIN) * (W - padL - padR);
 
@@ -125,7 +125,7 @@ export default function ProbChart({ teams, baseline = 0, highlightId = null, com
     yMin = center - MIN_WINDOW / 2;
     yMax = center + MIN_WINDOW / 2;
   }
-  const yPad = (yMax - yMin) * 0.1;
+  const yPad = (yMax - yMin) * 0.2;
   yMin = Math.max(0, yMin - yPad);
   yMax = Math.min(1, yMax + yPad);
 
