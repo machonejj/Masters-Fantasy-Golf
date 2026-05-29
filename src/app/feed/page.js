@@ -26,11 +26,10 @@ function classify(toPar) {
 }
 
 // The single biggest "moment" an event represents (banner-worthy), or null.
-// Kept rare on purpose: only eagles, big numbers, and team lead/top-3 swings.
-// Back-to-back birdies are common, so they get a small inline badge instead.
+// Kept rare on purpose: only eagles and big numbers. Lead changes were dropped
+// — they were noisy and most lead swings already read as a ScoreRow with the
+// team-total delta. Back-to-back birdies get a small inline badge instead.
 function highlightOf(e) {
-  if (e.tookLead) return { icon: '🔥', tone: 'good', text: `${e.team} takes the lead` };
-  if (e.tiedForLead) return { icon: '🔥', tone: 'good', text: `${e.team} is tied for 1st` };
   if (e.toPar <= -2) return { icon: '🦅', tone: 'good', text: e.toPar <= -3 ? 'Albatross!' : 'Eagle!' };
   if (e.toPar >= 2) return { icon: '💥', tone: 'bad', text: e.toPar >= 3 ? 'Big number' : 'Double bogey' };
   return null;
@@ -102,14 +101,18 @@ export default function LiveFeedPage() {
   const myId = data?.myTeamId || null;
   const teamById = Object.fromEntries(teams.map((t) => [t.id, t]));
 
-  // The feed shows only scoring holes — pars are background noise, so we drop
-  // them entirely (the underlying data is unchanged; this is display-only).
+  // The feed shows only events that actually moved the team's total score
+  // (the best-N sum). A birdie by a non-counting golfer is real golf but
+  // doesn't shift the team line, so it would just be noise here. Pars are
+  // a fast pre-cut; moved() then drops the "scored but didn't shift the
+  // best-N total" cases.
   const scoring = events.filter((e) => e.toPar !== 0);
+  const teamMoves = scoring.filter(moved);
   const counts = {
-    all: scoring.length,
-    mine: scoring.filter((e) => e.teamId === myId).length,
+    all: teamMoves.length,
+    mine: teamMoves.filter((e) => e.teamId === myId).length,
   };
-  const shown = filter === 'mine' ? scoring.filter((e) => e.teamId === myId) : scoring;
+  const shown = filter === 'mine' ? teamMoves.filter((e) => e.teamId === myId) : teamMoves;
 
   return (
     <div>
@@ -144,7 +147,9 @@ export default function LiveFeedPage() {
         <div className="card text-center text-sm text-gray-400 py-8">
           {scoring.length === 0
             ? 'No scoring yet — check back once play is underway.'
-            : 'Nothing here for this filter.'}
+            : teamMoves.length === 0
+              ? 'No team-total changes yet — counting golfers haven’t shifted.'
+              : 'Nothing here for this filter.'}
         </div>
       ) : (
         <div className="space-y-1.5">
